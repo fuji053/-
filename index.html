@@ -71,6 +71,12 @@
   .sel-col.p1 .card.on { border-color: var(--p1); background: #3a1c2a; }
   .sel-col.cpu .card.on { border-color: var(--cpu); background: #162c4c; }
   .menu .btn { display: block; width: 260px; margin: 8px auto; }
+  .lv-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .segs { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg { padding: 7px 16px; font-size: 14px; font-weight: 700; color: var(--text); background: #151c3b; touch-action: manipulation; }
+  .seg + .seg { border-left: 1px solid var(--line); }
+  .seg.on { background: var(--cpu); color: #04122a; }
+  canvas#game3d { position: fixed; inset: 0; width: 100vw; height: 100vh; display: none; }
   #result h1 { font-size: clamp(28px, 8vh, 48px); }
   #rotate { z-index: 50; background: var(--bg); }
   @media (orientation: portrait) { #rotate { display: flex; } }
@@ -86,6 +92,8 @@
     <h1>バトル試作</h1>
     <p class="sub">棒人間で操作感と吹っ飛びを試す版です<br>iPhoneは横向き・低電力モードはオフで遊んでください</p>
     <button class="btn primary" id="btnStart">はじめる</button>
+    <div><button class="btn" id="btnMode">表示：2D</button></div>
+    <p class="sub" id="modeNote" style="margin-top:6px">「表示」を押すと、2Dと3D（テスト）を切り替えられます</p>
   </div>
 </div>
 
@@ -97,7 +105,8 @@
       <div class="sel-col p1"><h3>あなた</h3><div class="cards" id="cardsP1"></div></div>
       <div class="sel-col cpu"><h3>CPU</h3><div class="cards" id="cardsCPU"></div></div>
     </div>
-    <div class="row" style="margin-top:12px">
+    <div class="lv-row"><span>CPUの強さ</span><div class="segs" id="cpuLevel"></div></div>
+    <div class="row" style="margin-top:8px">
       <button class="btn" id="btnBack">もどる</button>
       <button class="btn primary" id="btnFight">たたかう</button>
     </div>
@@ -112,6 +121,7 @@
     <button class="btn" id="btnRestart">最初からやり直す</button>
     <button class="btn" id="btnToSelect">キャラ選択へ</button>
     <button class="btn" id="btnFps">fps表示：オフ</button>
+    <button class="btn" id="btnMode2">表示：2D</button>
   </div>
 </div>
 
