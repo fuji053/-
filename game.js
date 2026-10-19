@@ -354,6 +354,18 @@ function scaleMove(m, sp, dm) {
   }
   return m;
 }
+// テンポ設定をキャラの動きの数値にかける
+function landLagT(n) { return Math.max(2, Math.round(n * ((D.tempo && D.tempo.landLag) || 1))); }
+function tempoStats(st) {
+  const T = D.tempo || {}, s = Object.assign({}, st);
+  const run = T.run || 1, air = T.air || 1, fall = T.fall || 1;
+  s.run *= run; s.runAccel = run;
+  s.air *= air; s.airAccel *= air;
+  s.gravity *= fall; s.fall *= fall;
+  // 重力が強くなってもジャンプの高さが同じになるように、跳ぶ力も上げる
+  s.jump *= Math.sqrt(fall); s.djump *= Math.sqrt(fall);
+  return s;
+}
 function buildMoves(c) {
   const moves = {};
   const W = D.weapons[c.weapon];
@@ -367,7 +379,13 @@ function buildMoves(c) {
     const key = SPECIAL_KEYS[k] || k;
     if (moves[key]) moves[key] = deepMerge(moves[key], c.overrides[k]);
   }
-  for (const k in moves) { moves[k].key = k; scaleMove(moves[k], c.stats.speed || 1, c.stats.dmgMul || 1); }
+  const ta = (D.tempo && D.tempo.attack) || 1;
+  for (const k in moves) {
+    moves[k].key = k;
+    // テンポを上げて技が短くなっても、技で動く距離（突進・復帰の高さ）は変わらないようにする
+    if (ta !== 1 && moves[k].events) for (const e of moves[k].events) if (Array.isArray(e.f)) { if (e.vx !== undefined) e.vx *= ta; if (e.vy !== undefined) e.vy *= ta; }
+    scaleMove(moves[k], (c.stats.speed || 1) * ta, c.stats.dmgMul || 1);
+  }
   moves.__counterHit = { key: '__counterHit', name: 'カウンター攻撃', dur: 28, poses: [[0, 'counterHit'], [14, 'counterHit'], [28, 'idle']] };
   return moves;
 }
@@ -403,7 +421,7 @@ const SPRING = {
 };
 class Fighter {
   constructor(c, slot, battle) {
-    this.c = c; this.s = c.stats; this.slot = slot; this.b = battle;
+    this.c = c; this.s = tempoStats(c.stats); this.slot = slot; this.b = battle;
     this.moves = buildMoves(c);
     this.look = c.look || { thick: 6, head: 10 };
     this.color = slot === 0 ? '#ff5d5d' : '#4fa8ff';
@@ -604,7 +622,7 @@ class Fighter {
       this.facing = nf;
       const run = Math.abs(mx) > 0.75;
       const target = (run ? s.run : s.walk * Math.min(1, Math.abs(mx) / 0.75)) * this.facing;
-      this.vx = approach(this.vx, target, run ? 1.0 : 0.8);
+      this.vx = approach(this.vx, target, run ? 1.0 * (s.runAccel || 1) : 0.8);
       this.state = run ? 'run' : 'walk';
     } else {
       this.vx = approach(this.vx, 0, PH.groundFriction);
@@ -957,8 +975,8 @@ class Fighter {
     this.vy = 0; this.kby = 0; this.ff = false; this.shCheck = false;
     this.landSquash = 6;
     switch (this.state) {
-      case 'air': this.state = 'land'; this.timer = 4; break;
-      case 'helpless': this.state = 'land'; this.timer = 20; break;
+      case 'air': this.state = 'land'; this.timer = landLagT(4); break;
+      case 'helpless': this.state = 'land'; this.timer = landLagT(20); break;
       case 'move':
         if (this.moveAir) {
           const m = this.move;
@@ -969,7 +987,7 @@ class Fighter {
           if (m.hits && m.hits.length && !m.helpless && (this.activeF < m.firstHit - 1 || this.activeF > m.lastHit + 7)) lag = 4;
           if (m.helpless) lag = m.landLag || 20;
           this.move = null; this.charging = false; this.chargeMul = 1; this.activeF = -1;
-          this.state = 'land'; this.timer = lag;
+          this.state = 'land'; this.timer = landLagT(lag);
         }
         break;
       case 'tumble': this.knockDown(); break;

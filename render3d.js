@@ -138,6 +138,9 @@ function makeRig(f) {
     rig.mirror.add(rimM); rimM.rotation.x = Math.PI / 2;
     mats.push(rig.shieldMat);
   }
+  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror].filter(Boolean));
+  // 3Dモデルがあるキャラは読み込みを始める（読み込めるまでは仮の体で表示）
+  if (f.c.model && window.ModelRig) rig.modelEntry = window.ModelRig.load(f.c.model);
   // シールド
   rig.bubble = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: f.slot === 0 ? 0xff5d5d : 0x4fa8ff, transparent: true, opacity: 0.28, depthWrite: false }));
   scene.add(rig.bubble);
@@ -205,37 +208,49 @@ function updateRig(rig, f, alpha, G) {
   rig.mat.color.set(look.col); rig.matD.color.set(look.dark);
   const blink = f.invuln > 0 && f.state !== 'move' && Math.floor(f.invuln / 4) % 2 === 0;
   for (const m of rig.mats) { m.transparent = blink; m.opacity = blink ? 0.45 : 1; }
+  // 3Dモデル（読み込めていれば、仮の体のかわりに表示）
+  if (rig.modelEntry && rig.modelEntry.ready && !rig.mr) rig.mr = window.ModelRig.build(rig.modelEntry, f, scene);
+  let fH3, fE3, bH3;
+  if (rig.mr) {
+    look.glow = f.charging && f.move && f.move.holdShot && f.shotT >= 1 ? 0.35 + 0.25 * Math.sin(f.anim * 0.18) : 0;
+    window.ModelRig.update(rig.mr, f, pts, x, y, g.rotation.y, look, blink);
+    for (const c of g.children) c.visible = rig.weaponParts.has(c);
+    const hi = window.ModelRig.handInfo(rig.mr);
+    fH3 = hi.fH; fE3 = hi.fE; bH3 = hi.bH;
+  } else { fH3 = V(pts.fH, zw); fE3 = V(pts.fE, zw); bH3 = V(pts.bH, zw); }
   // 武器
-  const fdx = pts.fH[0] - pts.fE[0], fdy = pts.fH[1] - pts.fE[1], fl = Math.hypot(fdx, fdy) || 1;
+  const fdx = fH3.x - fE3.x, fdy = fH3.y - fE3.y, fl = Math.hypot(fdx, fdy) || 1;
   const ux = fdx / fl, uy = fdy / fl;
   if (rig.bow) {
     // 弓は握り（弓の真ん中）を中心に回る
     const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
-    const gx = pts.fH[0] + ux * 10, gy = pts.fH[1] + uy * 10;
-    rig.bow.position.set(gx - Math.cos(ang) * 24, gy - Math.sin(ang) * 24, zw);
+    const bs = rig.mr ? 0.66 : 1, BR = 24 * bs; // 3Dモデルは体が小さめなので弓も小さく
+    rig.bow.scale.setScalar(bs);
+    const gx = fH3.x + ux * 7 * bs, gy = fH3.y + uy * 7 * bs;
+    rig.bow.position.set(gx - Math.cos(ang) * BR, gy - Math.sin(ang) * BR, fH3.z);
     rig.bow.rotation.set(0, 0, ang - rig.bowArc / 2);
-    const e1 = new THREE.Vector3(Math.cos(ang - rig.bowArc / 2) * 24, Math.sin(ang - rig.bowArc / 2) * 24, 0).add(rig.bow.position);
-    const e2 = new THREE.Vector3(Math.cos(ang + rig.bowArc / 2) * 24, Math.sin(ang + rig.bowArc / 2) * 24, 0).add(rig.bow.position);
-    const near = Math.hypot(pts.bH[0] - pts.fH[0], pts.bH[1] - pts.fH[1]) < 40;
-    const mid = near ? V(pts.bH, zw) : e1.clone().lerp(e2, 0.5);
+    const e1 = new THREE.Vector3(Math.cos(ang - rig.bowArc / 2) * BR, Math.sin(ang - rig.bowArc / 2) * BR, 0).add(rig.bow.position);
+    const e2 = new THREE.Vector3(Math.cos(ang + rig.bowArc / 2) * BR, Math.sin(ang + rig.bowArc / 2) * BR, 0).add(rig.bow.position);
+    const near = Math.hypot(bH3.x - fH3.x, bH3.y - fH3.y) < 40;
+    const mid = near ? new THREE.Vector3(bH3.x, bH3.y, fH3.z) : e1.clone().lerp(e2, 0.5);
     setSeg(rig.str1, e1, mid); setSeg(rig.str2, mid, e2);
     rig.arrow.visible = near && f.state === 'move';
-    if (rig.arrow.visible) setSeg(rig.arrow, V(pts.bH, zw), new THREE.Vector3(pts.fH[0] + ux * 14, pts.fH[1] + uy * 14, zw));
+    if (rig.arrow.visible) setSeg(rig.arrow, mid, new THREE.Vector3(fH3.x + ux * 14, fH3.y + uy * 14, fH3.z));
     // ため撃ち：ためるほど矢が光る
     const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : 0;
     rig.arrowMat.emissive.setRGB(st * 0.9, st * 0.75, st * 0.3);
     rig.glow.visible = st >= 1;
-    if (rig.glow.visible) { rig.glow.position.set(pts.fH[0] + ux * 12, pts.fH[1] + uy * 12, zw); rig.glow.scale.setScalar(13 + Math.sin(performance.now() / 120) * 2); }
+    if (rig.glow.visible) { rig.glow.position.set(fH3.x + ux * 12, fH3.y + uy * 12, fH3.z); rig.glow.scale.setScalar(13 + Math.sin(performance.now() / 120) * 2); }
   }
   if (rig.mirror) {
-    rig.mirror.position.set(pts.fH[0] + ux * 5, pts.fH[1] + uy * 5, zw + 2);
+    rig.mirror.position.set(fH3.x + ux * 5, fH3.y + uy * 5, fH3.z + 2);
     rig.mirror.quaternion.setFromUnitVectors(UP, tmpA.set(ux, uy, 0));
     const act = !!f.activeWindow('reflect') || !!f.activeWindow('counter');
     rig.shieldMat.emissive.setHex(act ? 0x4f9fcf : 0x000000);
   }
   g.updateMatrixWorld();
   if (rig.whip) {
-    const hand = V(pts.fH, zw).applyMatrix4(g.matrixWorld);
+    const hand = fH3.clone().applyMatrix4(g.matrixWorld);
     const tip = new THREE.Vector3(G.lerp(f.prevTip[0], f.tip[0], alpha), -G.lerp(f.prevTip[1], f.tip[1], alpha), hand.z);
     const ctrl = hand.clone().add(tip).multiplyScalar(0.5); ctrl.y -= 18;
     const n = rig.whip.length;
@@ -307,7 +322,7 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     seen.add(f);
     updateRig(rig, f, alpha, G);
   }
-  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); rigs.delete(f); }
+  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow); if (rig.mr) window.ModelRig.remove(rig.mr, scene); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); rigs.delete(f); }
   // 飛び道具
   const live = new Set(b.projectiles);
   for (const p of b.projectiles) {

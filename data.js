@@ -29,7 +29,7 @@
      cgrab   : 必殺技のつかみ。当たると extraMoves の技（つかんだ後の動き）に進む。シールドは効かない
      held    : 投げ・つかみ中の相手の位置 [コマ, 前, 上, 回転]
    ■ メテオ
-     ang が 240〜300（真下向き）の攻撃が空中の相手に当たると「メテオ」になり、真下にたたき落とします
+     ang が 235〜305（真下向き）の攻撃が空中の相手に当たると「メテオ」になり、真下にたたき落とします
    ■ キャラ全体の数値（stats）
      weight: 重さ（重いほど飛びにくい） / walk・run: 歩く・走る速さ / air: 空中の横移動の速さ
      jump・djump: ジャンプ・2段ジャンプの強さ / gravity: 落ちる加速 / fall: 落下の最高速度
@@ -42,6 +42,16 @@ window.GAME_DATA = {
   rules: {
     stocks: 3,              // ストック（残機）
     respawnInvincible: 150, // 復活したあとの無敵時間（コマ）
+  },
+
+  /* ---------- ゲームのテンポ（展開の速さ） ----------
+     1 = 元の速さ。全キャラに同じ割合でかかります（歩く速さは変えません） */
+  tempo: {
+    attack: 1.15,   // 技の出る速さとスキの短さ（1.15 = 15%速い）
+    run: 1.2,       // ダッシュの速さと、走り出しの速さ
+    air: 1.1,       // 空中で横に動く速さ
+    fall: 1.1,      // 落ちる速さ（ジャンプの高さは変わらないように調整します）
+    landLag: 0.75,  // 着地のスキ（0.75 = 25%短い）
   },
 
   /* ---------- 物理・システム ---------- */
@@ -376,6 +386,7 @@ window.GAME_DATA = {
     /* ===== 1：拳闘士（近距離・パワー・プロレスラー） ===== */
     {
       id: 'fist', no: 1, name: '拳闘士', range: '近距離', type: 'パワー', weapon: 'unarmed',
+      model: 'wrestler.glb', // 3Dモデル（Higgsfieldで作成）
       stats: { weight: 125, walk: 2.8, run: 5.0, air: 3.2, airAccel: 0.32, jump: 13.8, djump: 12.8,
                gravity: 0.66, fall: 11, airJumps: 1, dmgMul: 1.1, kbMul: 1.0, speed: 0.92 },
       look: { thick: 9.5, head: 11.5 },
@@ -510,6 +521,7 @@ window.GAME_DATA = {
     /* ===== 14：弓使い（遠距離・バランス・弓） ===== */
     {
       id: 'bow', no: 14, name: '弓使い', range: '遠距離', type: 'バランス', weapon: 'bow',
+      model: 'archer.glb', // 3Dモデル（Higgsfieldで作成・Blenderで髪と布の骨を追加）
       stats: { weight: 92, walk: 3.4, run: 6.2, air: 3.9, airAccel: 0.42, jump: 15.2, djump: 14.2,
                gravity: 0.55, fall: 9.5, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.0 },
       look: { thick: 6, head: 10 },
