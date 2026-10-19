@@ -90,10 +90,8 @@
 <div class="screen show" id="title">
   <div class="box">
     <h1>バトル試作</h1>
-    <p class="sub">棒人間で操作感と吹っ飛びを試す版です<br>iPhoneは横向き・低電力モードはオフで遊んでください</p>
+    <p class="sub">仮のキャラで操作感と吹っ飛びを試す版です<br>iPhoneは横向き・低電力モードはオフで遊んでください</p>
     <button class="btn primary" id="btnStart">はじめる</button>
-    <div><button class="btn" id="btnMode">表示：2D</button></div>
-    <p class="sub" id="modeNote" style="margin-top:6px">「表示」を押すと、2Dと3D（テスト）を切り替えられます</p>
   </div>
 </div>
 
@@ -121,7 +119,6 @@
     <button class="btn" id="btnRestart">最初からやり直す</button>
     <button class="btn" id="btnToSelect">キャラ選択へ</button>
     <button class="btn" id="btnFps">fps表示：オフ</button>
-    <button class="btn" id="btnMode2">表示：2D</button>
   </div>
 </div>
 
@@ -140,6 +137,8 @@
 </div>
 
 <script src="data.js"></script>
+<script src="three.min.js"></script>
+<script src="render3d.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

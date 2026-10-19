@@ -1,5 +1,5 @@
 /* =====================================================================
-   3D表示（テスト）
+   3D表示
    2Dと同じ骨組み（関節の角度）を使って、立体の仮キャラを動かします
    当たり判定や動きはすべて game.js と同じで、見た目だけが変わります
    ===================================================================== */
@@ -126,7 +126,10 @@ function makeRig(f) {
     const sm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
     rig.str1 = new THREE.Mesh(CYL, sm); rig.str1.userData.r = 0.5; g.add(rig.str1);
     rig.str2 = new THREE.Mesh(CYL, sm); rig.str2.userData.r = 0.5; g.add(rig.str2);
-    rig.arrow = new THREE.Mesh(CYL, new THREE.MeshStandardMaterial({ color: 0xffe9a8 })); rig.arrow.userData.r = 0.9; g.add(rig.arrow);
+    rig.arrowMat = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0x000000 });
+    rig.arrow = new THREE.Mesh(CYL, rig.arrowMat); rig.arrow.userData.r = 0.9; g.add(rig.arrow);
+    rig.glow = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
+    rig.glow.visible = false; g.add(rig.glow);
     mats.push(bm);
   } else if (w === 'mirror') {
     rig.shieldMat = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.15, metalness: 0.85, emissive: 0x000000 });
@@ -163,11 +166,11 @@ function updateRig(rig, f, alpha, G) {
   const pts = G.solvePose(pose, f.look, f.grounded, f.state === 'down');
   let x = G.lerp(f.px, f.x, alpha), y = G.lerp(f.py, f.y, alpha);
   if (f.hitlag > 0 && f.shakeT > 0) x += (Math.random() - 0.5) * 6;
-  if (f.charging) x += (Math.random() - 0.5) * 2;
+  if (f.charging && !(f.move && f.move.holdShot)) x += (Math.random() - 0.5) * 2;
   // 向き（カメラ側を通って振り向く）
   const target = f.facing > 0 ? -0.35 : -(Math.PI - 0.35);
   rig.yaw += (target - rig.yaw) * 0.35;
-  g.rotation.y = rig.yaw;
+  g.rotation.y = rig.yaw + (pose.yw || 0) * Math.PI / 180; // 回転する技（旋風脚・サイクロンアッパーなど）
   g.position.set(x, -y, 0);
   const zw = rig.zw;
   const P = {};
@@ -206,8 +209,10 @@ function updateRig(rig, f, alpha, G) {
   const fdx = pts.fH[0] - pts.fE[0], fdy = pts.fH[1] - pts.fE[1], fl = Math.hypot(fdx, fdy) || 1;
   const ux = fdx / fl, uy = fdy / fl;
   if (rig.bow) {
-    const ang = Math.atan2(uy, ux);
-    rig.bow.position.set(pts.fH[0] - ux * 14, pts.fH[1] - uy * 14, zw);
+    // 弓は握り（弓の真ん中）を中心に回る
+    const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
+    const gx = pts.fH[0] + ux * 10, gy = pts.fH[1] + uy * 10;
+    rig.bow.position.set(gx - Math.cos(ang) * 24, gy - Math.sin(ang) * 24, zw);
     rig.bow.rotation.set(0, 0, ang - rig.bowArc / 2);
     const e1 = new THREE.Vector3(Math.cos(ang - rig.bowArc / 2) * 24, Math.sin(ang - rig.bowArc / 2) * 24, 0).add(rig.bow.position);
     const e2 = new THREE.Vector3(Math.cos(ang + rig.bowArc / 2) * 24, Math.sin(ang + rig.bowArc / 2) * 24, 0).add(rig.bow.position);
@@ -216,6 +221,11 @@ function updateRig(rig, f, alpha, G) {
     setSeg(rig.str1, e1, mid); setSeg(rig.str2, mid, e2);
     rig.arrow.visible = near && f.state === 'move';
     if (rig.arrow.visible) setSeg(rig.arrow, V(pts.bH, zw), new THREE.Vector3(pts.fH[0] + ux * 14, pts.fH[1] + uy * 14, zw));
+    // ため撃ち：ためるほど矢が光る
+    const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : 0;
+    rig.arrowMat.emissive.setRGB(st * 0.9, st * 0.75, st * 0.3);
+    rig.glow.visible = st >= 1;
+    if (rig.glow.visible) { rig.glow.position.set(pts.fH[0] + ux * 12, pts.fH[1] + uy * 12, zw); rig.glow.scale.setScalar(13 + Math.sin(performance.now() / 120) * 2); }
   }
   if (rig.mirror) {
     rig.mirror.position.set(pts.fH[0] + ux * 5, pts.fH[1] + uy * 5, zw + 2);
@@ -258,10 +268,16 @@ function projMesh(p) {
   const col = new THREE.Color(p.owner.color);
   if (p.type === 'arrow') {
     m = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 28, 8), new THREE.MeshStandardMaterial({ color: 0xf3e3c0 }));
+    const faint = p.noHit; // 復帰用の矢（当たらない）はうすく
+    const mk = c => new THREE.MeshStandardMaterial({ color: c, transparent: faint, opacity: faint ? 0.4 : 1, emissive: p.big ? 0x806020 : 0x000000 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(p.big ? 1.6 : 1, p.big ? 1.6 : 1, 28, 8), mk(0xf3e3c0));
     shaft.rotation.z = Math.PI / 2; shaft.position.x = -14; m.add(shaft);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(3.5, 9, 10), new THREE.MeshStandardMaterial({ color: col }));
+    const head = new THREE.Mesh(new THREE.ConeGeometry(p.big ? 5 : 3.5, 9, 10), mk(col));
     head.rotation.z = -Math.PI / 2; head.position.x = 3; m.add(head);
+    if (p.big) {
+      const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
+      gl.scale.set(22, 9, 9); gl.position.x = -6; m.add(gl);
+    }
   } else if (p.type === 'disc') {
     m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, 4, 24), new THREE.MeshStandardMaterial({ color: 0xcfe6ff, metalness: 0.85, roughness: 0.15 }));
   } else {

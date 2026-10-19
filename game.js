@@ -48,8 +48,84 @@ const store = {
    腕・脚の1つ目の数字は付け根の角度（0=真下、90=前、180=真上）、2つ目はひじ・ひざの曲げ
    ひじは前にだけ（0〜165）、ひざは後ろにだけ（-165〜0）曲がるように制限しています
    ===================================================================== */
-const PK = ['t', 'fa1', 'fa2', 'ba1', 'ba2', 'fl1', 'fl2', 'bl1', 'bl2', 'r', 'tw'];
-function P(t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r = 0, tw = 0) { return { t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r, tw }; }
+/* =====================================================================
+   効果音（ファイルを使わず、その場で音を作って鳴らす）
+   iPhoneは画面に最初にふれたときから音が出せるようになります
+   ===================================================================== */
+const SFX = (() => {
+  let ac = null, master = null, noiseBuf = null;
+  const lastT = {};
+  function unlock() {
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ac = new AC();
+        master = ac.createGain(); master.gain.value = 0.55;
+        const comp = ac.createDynamicsCompressor(); // 音が重なっても割れないように
+        master.connect(comp); comp.connect(ac.destination);
+        const n = ac.sampleRate;
+        noiseBuf = ac.createBuffer(1, n, n);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, 22050); s.connect(ac.destination); s.start(0);
+      }
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { /* 音が出せない環境では何もしない */ }
+  }
+  for (const ev of ['touchstart', 'touchend', 'mousedown', 'keydown']) window.addEventListener(ev, unlock, { capture: true, passive: true });
+  function env(g, t0, a, peak, dur) {
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  }
+  function tone(type, f0, f1, dur, vol, delay = 0) {
+    const t0 = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    env(g, t0, 0.004, vol, dur);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol, f0, f1, q = 1, kind = 'bandpass', delay = 0) {
+    const t0 = ac.currentTime + delay, s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; fl.type = kind; fl.Q.value = q;
+    fl.frequency.setValueAtTime(f0, t0); fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t0 + dur);
+    env(g, t0, 0.003, vol, dur);
+    s.connect(fl); fl.connect(g); g.connect(master); s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.02);
+  }
+  const lib = {
+    hitL()  { noise(0.07, 0.35, 3200, 1400, 1.2); tone('square', 260, 120, 0.05, 0.08); },
+    hitM()  { noise(0.12, 0.55, 2200, 500, 0.9); tone('sine', 190, 60, 0.14, 0.45); },
+    hitH()  { noise(0.22, 0.8, 1800, 260, 0.7); tone('sine', 140, 38, 0.32, 0.8); tone('square', 90, 40, 0.12, 0.12); },
+    armor() { tone('triangle', 420, 300, 0.09, 0.3); noise(0.06, 0.25, 1500, 900, 2); },
+    shield(){ tone('sine', 700, 520, 0.08, 0.25); noise(0.05, 0.2, 4000, 2500, 3); },
+    meteor(){ tone('sine', 220, 30, 0.55, 0.9); noise(0.35, 0.8, 900, 80, 0.6, 'lowpass'); tone('sawtooth', 300, 60, 0.25, 0.12); },
+    cine()  { noise(0.08, 0.9, 6000, 3000, 0.8, 'highpass'); tone('sine', 110, 28, 1.0, 0.95); noise(0.9, 0.45, 600, 60, 0.5, 'lowpass', 0.03); },
+    ko()    { noise(0.5, 0.7, 400, 3000, 0.8); tone('sine', 90, 30, 0.8, 0.9, 0.05); noise(0.7, 0.6, 1200, 80, 0.5, 'lowpass', 0.08); },
+    shoot(p){ noise(0.09, 0.3 + p * 0.25, 2500, 6000, 1.5); tone('triangle', 900 + p * 500, 260, 0.12, 0.18 + p * 0.12); },
+    charged(){ tone('sine', 988, 988, 0.18, 0.22); tone('sine', 1480, 1480, 0.26, 0.18, 0.06); },
+    jump()  { tone('sine', 320, 620, 0.09, 0.12); },
+    grab()  { tone('square', 180, 120, 0.07, 0.14); noise(0.05, 0.25, 1200, 700, 2); },
+    reflect(){ tone('triangle', 1300, 2100, 0.14, 0.25); tone('sine', 2600, 2600, 0.12, 0.08, 0.03); },
+    quake() { noise(0.4, 0.75, 500, 60, 0.6, 'lowpass'); tone('sine', 75, 35, 0.4, 0.7); },
+    swing(p){ noise(0.1 + p * 0.06, 0.12 + p * 0.18, 500, 2200, 1.4); },
+    tech()  { tone('triangle', 600, 900, 0.07, 0.15); },
+  };
+  return {
+    unlock,
+    play(name, p = 0) {
+      if (!ac || ac.state !== 'running' || !lib[name]) return;
+      const now = ac.currentTime;
+      if (lastT[name] !== undefined && now - lastT[name] < 0.03) return;
+      lastT[name] = now;
+      try { lib[name](p); } catch (e) { /* 無視 */ }
+    },
+    get ready() { return !!ac && ac.state === 'running'; },
+  };
+})();
+
+const PK = ['t', 'fa1', 'fa2', 'ba1', 'ba2', 'fl1', 'fl2', 'bl1', 'bl2', 'r', 'tw', 'yw', 'wr', 'pa'];
+// yw = 体の横回転（3Dで回る技） / wr = 武器の回転 / pa = 1 で体全体を地面につける（寝そべる技）
+function P(t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r = 0, tw = 0) { return { t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r, tw, yw: 0, wr: 0, pa: 0 }; }
 const POSES = {
   // 立ち・移動
   idle:         P(6, 25, 80, -12, 90, 16, -14, -16, -8, 0, 0.15),
@@ -143,6 +219,51 @@ const POSES = {
   throwFwd:     P(25, 90, 0, 85, 10, 55, -55, -35, 0),
   throwUp:      P(-10, 175, 0, 170, 0, 20, -20, -15, -10),
   throwDown:    P(45, 30, 0, 30, 0, 60, -80, -45, -20),
+  // 弓使い
+  bowJab:       P(14, 92, 0, 30, 95, 40, -35, -30, -8, 0, 0.5),
+  palm:         P(18, 20, 95, 88, 0, 40, -35, -32, -5, 0, -0.6),
+  bowSweepWind: P(-5, -100, 0, 40, 85, 30, -30, -25, -10, 0, -0.8),
+  bowSweep:     P(22, 95, 0, -30, 70, 45, -40, -35, 0, 0, 0.8),
+  sideKickWind: P(-15, 40, 95, 20, 95, 100, -135, -10, -8, 0, -0.3),
+  sideKick:     P(-35, 10, 85, -20, 75, 98, 0, -12, -6, 0, 0.2),
+  bowSpinUp:    P(-6, 165, 0, 60, 85, 20, -20, -20, -10),
+  staffWind:    P(-15, -120, 0, -60, 40, 30, -30, -35, -10, 0, -1),
+  staffSwing:   P(30, 90, 0, 70, 10, 60, -60, -40, 0, 0, 1),
+  plantWind:    P(30, 30, 0, 40, 70, 72, -118, -10, -92),
+  plantKick:    P(25, 25, 0, 40, 60, 92, 0, -20, -95),
+  tornadoKick:  P(5, 100, 0, -100, 0, 88, 0, -50, -30),
+  aimDraw:      P(4, 90, 0, 90, 165, 32, -28, -30, -12),
+  spearWind:    P(-5, 60, 45, 70, 140, 30, -30, -25, -10, 0, -0.5),
+  spearThrust:  P(25, 90, 0, 90, 15, 60, -50, -40, 0, 0, 0.6),
+  // 拳闘士（プロレスラー）
+  chopWind:     P(-5, -60, 60, 30, 95, 30, -25, -25, -8, 0, -0.7),
+  chop:         P(20, 85, 10, -30, 85, 40, -30, -32, 0, 0, 0.7),
+  elbowWind:    P(0, -20, 140, 30, 95, 30, -25, -25, -8, 0, -0.4),
+  elbow:        P(22, 75, 150, -30, 85, 45, -35, -32, 0, 0, 0.8),
+  headbuttWind: P(-25, 30, 95, 30, 95, 25, -30, -25, -10),
+  headbutt:     P(50, 20, 85, 10, 85, 55, -50, -40, 0),
+  bigBootWind:  P(-5, 30, 85, 10, 85, 110, -140, -8, -6),
+  bigBoot:      P(-30, 10, 75, -10, 75, 100, 0, -10, -6),
+  elbowUpWind:  P(25, -10, 140, 40, 95, 60, -90, -5, -50),
+  elbowUp:      P(-15, 150, 150, 30, 85, 15, -15, -20, -10, 0, 0.6),
+  slide:        Object.assign(P(-60, 150, 20, 160, 20, 85, 0, 60, -40), { pa: 1 }),
+  lariatWind:   P(-10, -90, 20, 40, 85, 30, -30, -30, -10, 0, -1),
+  lariatFull:   P(15, 90, 0, -60, 40, 55, -50, -40, 0, 0, 1),
+  headbuttUp:   P(-5, -30, 40, -40, 40, 10, 0, -10, 0),
+  stompWind:    P(0, 60, 60, 60, 60, 100, -110, -10, -10),
+  stompDown:    P(15, 40, 40, 40, 40, 25, -30, -15, -20),
+  bodyPress:    P(0, 150, 0, 30, 0, 20, 0, -20, 0, 80),
+  dropkick:     P(10, 60, 60, 60, 60, -100, 0, -95, 0, -20),
+  footStamp:    P(0, 130, 25, 120, 25, 0, 0, 6, 0),
+  chopBigWind:  P(-20, 175, 25, 60, 85, 30, -30, -30, -10, 0, -0.6),
+  chopBig:      P(35, 60, 0, -40, 60, 60, -60, -40, 0, 0, 0.9),
+  leapGrab:     P(30, 90, 0, 85, 10, 60, -80, -40, -20),
+  sleeperHold:  P(5, 70, 125, 60, 135, 25, -25, -25, -8),
+  bodyAttack:   P(0, 170, 0, 160, 0, 0, 0, 10, 0, 75),
+  backhand:     P(15, 95, 0, -40, 60, 30, -30, -30, -10, 0, 0.7),
+  divingElbow:  P(0, 10, 150, 30, 125, 20, -60, -10, -60, 60),
+  germanWind:   P(10, 80, 30, 80, 30, 50, -60, -30, -20),
+  germanBridge: Object.assign(P(-30, 150, 20, 150, 20, 60, -100, 40, -110, -110), { pa: 1 }),
 };
 function lerpPose(a, b, t, out) {
   const o = out || {};
@@ -165,6 +286,7 @@ const SK = { thigh: 24, shin: 23, torso: 30, upper: 18, fore: 17 };
 function dirv(a) { const r = a * DEG; return [Math.sin(r), -Math.cos(r)]; }
 // ポーズ → 関節の位置（前向き・上がプラスの座標。足元が原点）
 function solvePose(p, look, plant, plantAll) {
+  if (p.pa > 0.5) plantAll = true;
   const fa2 = clamp(p.fa2, 0, 165), ba2 = clamp(p.ba2, 0, 165);
   const fl2 = clamp(p.fl2, -165, 0), bl2 = clamp(p.bl2, -165, 0);
   const tw = clamp(p.tw || 0, -1.2, 1.2);
@@ -216,6 +338,7 @@ function scaleMove(m, sp, dm) {
   if (m.hits) m.hits.forEach(h => { h.f = SR(h.f); if (h.dmg) h.dmg *= dm; });
   if (m.events) m.events.forEach(e => { e.f = Array.isArray(e.f) ? SR(e.f) : S(e.f); });
   if (m.charge) m.charge.f = S(m.charge.f);
+  if (m.holdShot) m.holdShot.f = S(m.holdShot.f);
   if (m.loop) { m.loop.from = S(m.loop.from); m.loop.to = S(m.loop.to); }
   if (m.reflect) m.reflect.f = SR(m.reflect.f);
   if (m.counter) m.counter.f = SR(m.counter.f);
@@ -237,7 +360,9 @@ function buildMoves(c) {
   for (const k in W) moves[k] = clone(W[k]);
   for (const k in D.throws) moves[k] = clone(D.throws[k]);
   for (const k in D.common) moves[k] = clone(D.common[k]);
+  for (const k in (c.throws || {})) moves[k] = clone(c.throws[k]);
   for (const k in c.specials) moves[SPECIAL_KEYS[k]] = clone(c.specials[k]);
+  for (const k in (c.extraMoves || {})) moves[k] = clone(c.extraMoves[k]);
   for (const k in (c.overrides || {})) {
     const key = SPECIAL_KEYS[k] || k;
     if (moves[key]) moves[key] = deepMerge(moves[key], c.overrides[k]);
@@ -430,6 +555,7 @@ class Fighter {
     this.grounded = false; this.state = 'air'; this.ff = false;
     this.vx = clamp(this.vx + pad.mx * 1.2, -s.air * 1.2, s.air * 1.2);
     this.b.fx.dust(this.x, this.y + 2, 0.5);
+    if (this.slot === 0) SFX.play('jump');
   }
   shortHopCheck(pad) {
     if (!this.shCheck) return;
@@ -524,7 +650,7 @@ class Fighter {
     if ((key === 'grab' || key === 'uspecial' || key === 'uspecialAir') && pad && Math.abs(pad.mx) > 0.25) this.facing = sign(pad.mx);
     this.state = 'move'; this.move = m; this.mf = 0; this.activeF = -1;
     this.hitRec = new Map(); this.loops = 0;
-    this.chargeT = 0; this.chargeMul = 1; this.charging = false; this.chargeDone = false;
+    this.chargeT = 0; this.chargeMul = 1; this.charging = false; this.chargeDone = false; this.shotT = 0;
     this.chargeBtn = btn || 'A';
     this.moveAir = !this.grounded;
     this.trail = []; this.trailJoint = null;
@@ -547,6 +673,21 @@ class Fighter {
       }
       this.chargeDone = true; this.charging = false;
     }
+    // ため撃ち（Bを押している間ためて、離すと発射。シールドでやめられる）
+    const hs = m.holdShot;
+    if (hs && this.chargeBtn === 'B' && f === hs.f && !this.chargeDone) {
+      if (pad.take('shield')) { this.charging = false; this.endMove(); return; }
+      if (pad.held.B && this.chargeT < hs.max + hs.over) {
+        this.chargeT++; this.charging = true;
+        this.shotT = Math.min(1, this.chargeT / hs.max);
+        if (this.chargeT === hs.max) { this.b.fx.ring(this.hand[0], this.hand[1], '#ffe9a8', 46); SFX.play('charged'); }
+        this.activeF = -1;
+        if (this.grounded) this.vx = approach(this.vx, 0, PH.groundFriction);
+        else { this.airDrift(pad, 0.5); this.vxSet = true; if (this.vy > 1.5) this.vy = 1.5; } // 空中でためている間はゆっくり落ちる
+        return;
+      }
+      this.chargeDone = true; this.charging = false;
+    }
     // 押し続けると続く技
     if (m.loop && f === m.loop.to && pad.held.B && this.loops < m.loop.max) {
       this.loops++; f = this.mf = m.loop.from; this.hitRec.clear();
@@ -565,6 +706,10 @@ class Fighter {
       } else if (this.airAct(pad)) return;
     }
     this.activeF = f;
+    if (m.hits && f === m.firstHit && !m.hits[0].cgrab && !m.hits[0].grab) {
+      const p = Math.max(...m.hits.map(h => h.dmg || 0));
+      if (p >= 5) SFX.play('swing', clamp((p * this.chargeMul - 5) / 15, 0, 1));
+    }
     // 崖攻撃：崖から上がる動き
     if (m.key === 'ledgeAttack') {
       const t = clamp(f / 15, 0, 1), side = -this.facing;
@@ -583,8 +728,8 @@ class Fighter {
     if (m.release !== undefined && f === m.release && this.grabbed) {
       const t = this.grabbed;
       this.grabbed = null; t.grabbedBy = null;
-      const h = m.hit;
-      this.b.applyHit(this, t, { dmg: h.dmg, ang: h.ang, bkb: h.bkb, kbg: h.kbg, react: h.react }, this.facing, t.x, t.y - 50, false);
+      t.heldR = 0;
+      this.b.applyHit(this, t, m.hit, this.facing, t.x, t.y - 50, false);
     }
     if (this.grounded) { if (!this.vxSet) this.vx = approach(this.vx, 0, PH.groundFriction); }
     else if (!this.vxSet) this.airDrift(pad, 0.85);
@@ -595,6 +740,17 @@ class Fighter {
     if (ev.vx !== undefined) { this.vx = ev.vx * this.facing; this.vxSet = true; }
     if (ev.vy !== undefined) { this.vy = -ev.vy; if (ev.vy > 0) { this.grounded = false; this.ff = false; } }
     if (ev.proj) this.b.spawnProjectile(this, ev);
+    if (ev.quake) {
+      for (const d of [-1, 1]) this.b.fx.dust(this.x + d * 45, 0, 1.7);
+      this.b.shake = Math.max(this.b.shake, 6);
+      SFX.play('quake');
+    }
+  }
+  // ためている間の技のコマ（ポーズと重力の計算に使う）
+  holdFrame() {
+    const m = this.move;
+    if (this.activeF >= 0) return this.activeF;
+    return m.charge ? m.charge.f : m.holdShot ? m.holdShot.f : 0;
   }
   endMove() {
     const m = this.move;
@@ -706,14 +862,16 @@ class Fighter {
     const u = b[0] === a[0] ? 1 : clamp((f - a[0]) / (b[0] - a[0]), 0, 1);
     t.x = this.x + lerp(a[1], b[1], ease(u)) * this.facing;
     t.y = this.y - lerp(a[2], b[2], ease(u));
-    t.facing = -this.facing;
+    t.heldR = a.length > 3 ? lerp(a[3], b[3], ease(u)) : 0;
+    t.facing = m.faceAway ? this.facing : -this.facing;
+    if (t.y > -2 && Math.abs(t.x) <= ST.halfWidth) { t.y = 0; t.grounded = true; } else t.grounded = false;
   }
   releaseGrab(push) {
     const t = this.grabbed;
     this.grabbed = null;
     if (this.state === 'holding') this.state = 'idle';
     if (t && t.grabbedBy === this) {
-      t.grabbedBy = null;
+      t.grabbedBy = null; t.heldR = 0;
       t.state = t.grounded ? 'idle' : 'air';
       if (push) { t.kbx = this.facing * 5; this.kbx = -this.facing * 4; }
     }
@@ -724,6 +882,7 @@ class Fighter {
     this.vy = -12; this.grounded = false; this.shieldHP = PH.shieldMax * 0.4;
     this.b.fx.ring(this.x, this.y - 45, '#ffe066', 90);
     this.b.shake = Math.max(this.b.shake, 10);
+    SFX.play('meteor');
   }
   /* ---------- 物理 ---------- */
   physics() {
@@ -732,7 +891,7 @@ class Fighter {
     if (!this.grounded) {
       let g = s.gravity;
       if (this.state === 'move') {
-        const m = this.move, f = this.activeF < 0 ? (m.charge ? m.charge.f : 0) : this.activeF;
+        const m = this.move, f = this.holdFrame();
         if (m.gravityFrames && f >= m.gravityFrames[0] && f <= m.gravityFrames[1]) g = 0;
         else if (m.gravityMul !== undefined) g *= m.gravityMul;
       }
@@ -786,6 +945,7 @@ class Fighter {
       this.state = 'tech'; this.timer = 14; this.invuln = Math.max(this.invuln, 18); this.techT = 0;
       this.jumps = this.s.airJumps; this.usedOnce = {}; this.ledgeGrabs = 0;
       this.b.fx.ring(this.x, -10, '#ffffff', 40);
+      SFX.play('tech');
       return;
     }
     if (this.state === 'tumble' && this.kby > 9) { // 強く地面にたたきつけられたらバウンド
@@ -802,7 +962,8 @@ class Fighter {
       case 'move':
         if (this.moveAir) {
           const m = this.move;
-          if (m.landSpawn) for (const ev of m.landSpawn) this.b.spawnProjectile(this, ev);
+          if (m.noLandCancel) { this.moveAir = false; break; }
+          if (m.landSpawn) { for (const ev of m.landSpawn) this.b.spawnProjectile(this, ev); SFX.play('quake'); this.b.shake = Math.max(this.b.shake, 5); }
           let lag = m.landLag !== undefined ? m.landLag : 6;
           // 本家と同じ「着地キャンセル」：攻撃の出る前・出し終わってしばらく後なら着地のスキが少ない
           if (m.hits && m.hits.length && !m.helpless && (this.activeF < m.firstHit - 1 || this.activeF > m.lastHit + 7)) lag = 4;
@@ -826,7 +987,7 @@ class Fighter {
     const P0 = POSES;
     switch (this.state) {
       case 'move': {
-        target = this.movePose(this.move, this.activeF < 0 ? (this.move.charge ? this.move.charge.f : 0) : this.activeF);
+        target = this.movePose(this.move, this.holdFrame());
         sp = SPRING.move;
         break;
       }
@@ -863,14 +1024,19 @@ class Fighter {
       case 'down': target = P0.down; sp = SPRING.hurt; break;
       case 'dizzy': target = copyPose(P0.hurt); target.t = Math.sin(this.anim * 0.1) * 15; sp = SPRING.soft; break;
       case 'holding': target = P0.hold; break;
-      case 'grabbed': target = P0.grabbed; sp = SPRING.hurt; break;
+      case 'grabbed':
+        target = copyPose(P0.grabbed); target.r = this.heldR || 0; sp = SPRING.snap;
+        if (this.grounded && Math.abs(Math.sin(target.r * DEG)) > 0.7) target.pa = 1; // 寝かされている
+        break;
       case 'ledge': target = copyPose(P0.ledgeHang); target.fl1 += Math.sin(this.anim * 0.05) * 6; sp = SPRING.soft; break;
       case 'ledgeClimb': target = this.timer < 12 ? P0.ledgeClimb : P0.crouch; sp = SPRING.loco; break;
       default: target = P0.idle;
     }
     // 回転の数値が大きく飛ぶとき（360度回った後など）は、近い向きにそろえる
-    const dr = target.r - this.disp.r;
-    if (Math.abs(dr) > 180) { const n = Math.round(dr / 360) * 360; this.disp.r += n; this.prevDisp.r += n; }
+    for (const key of ['r', 'yw', 'wr']) {
+      const dr = target[key] - this.disp[key];
+      if (Math.abs(dr) > 180) { const n = Math.round(dr / 360) * 360; this.disp[key] += n; this.prevDisp[key] += n; }
+    }
     const k = sp[0], dmp = sp[1];
     for (let i = 0; i < PK.length; i++) {
       const key = PK[i];
@@ -983,6 +1149,7 @@ class FX {
   ring(x, y, color, size) { this.add({ k: 'ring', x, y, color, life: 18, size }); }
   smoke(x, y) { this.add({ k: 'smoke', x, y, life: 26, size: 7 + rnd() * 5 }); }
   ko(x, y, color) { this.add({ k: 'ko', x, y, color, life: 50 }); }
+  meteor(x, y) { this.add({ k: 'meteor', x, y, life: 26 }); this.ring(x, y, '#ffb13b', 70); }
   update() {
     for (const e of this.list) {
       e.t++;
@@ -1027,7 +1194,10 @@ class CpuBrain {
       const pl = this.plan;
       if (pl.type === 'shield') p.held.shield = true;
       if (pl.type === 'holdC') p.held.C = true;
-      if (pl.type === 'holdB') p.held.B = true;
+      if (pl.type === 'holdB') {
+        p.held.B = true;
+        if (pl.t > 2 && Math.abs(op.x - me.x) < 110 && me.charging) pl.t = 1; // 近づかれたら早めに撃つ
+      }
       if (pl.type === 'fullhop') p.held.jump = true;
       if (--pl.t <= 0) { this.plan = null; p.held.shield = false; p.held.jump = false; }
       if (pl.type !== 'fullhop') return;
@@ -1117,14 +1287,18 @@ class CpuBrain {
       if (rnd() < cfg.shieldChance) { this.plan = { type: 'shield', t: 12 + ((rnd() * 14) | 0) }; return; }
     }
     // 飛び道具を跳ね返す
-    if (this.style === 'counter') {
+    const reflector = this.style === 'counter' || (me.c.cpu && me.c.cpu.reflect);
+    if (reflector) {
       for (const pr of this.b.projectiles) {
-        if (pr.owner !== me && pr.type !== 'shock' && Math.abs(pr.x - me.x) < 180 && Math.abs(pr.y - (me.y - 50)) < 80 && sign(pr.vx) === -sign(pr.x - me.x)) {
-          if (this.face(sign(pr.x - me.x))) { p.press('B'); }
+        if (pr.owner !== me && !pr.noHit && pr.type !== 'shock' && Math.abs(pr.x - me.x) < 180 && Math.abs(pr.y - (me.y - 50)) < 80 && sign(pr.vx) === -sign(pr.x - me.x)) {
+          if (this.face(sign(pr.x - me.x))) { if (this.style !== 'counter') p.my = -1; p.press('B'); }
           return;
         }
       }
     }
+    // 必殺技のつかみ（拳闘士）：シールドしている相手に強い
+    const cgrab = me.c.cpu && me.c.cpu.cgrab;
+    if (cgrab && me.grounded && op.state === 'shield' && adx < 58 && rnd() < 0.55) { if (this.face(dir)) { p.my = -1; p.press('B'); } return; }
     if (me.grounded && op.state === 'shield' && adx < 70) { if (this.face(dir)) p.press('grab'); return; }
     // 相手がダウン中：近づいて攻撃
     if (op.state === 'down' && me.grounded) {
@@ -1144,14 +1318,23 @@ class CpuBrain {
     // 遠距離タイプ
     if (this.style === 'zone') {
       if (adx < 120 && me.grounded) {
-        if (rnd() < 0.45) { if (this.face(dir)) { p.my = -1; p.press('B'); } return; }
         const r = rnd();
-        if (r < 0.4) { if (this.face(dir)) p.press('A'); } else if (r < 0.7) { p.press('grab'); p.mx = dir * 0.5; } else { p.mx = -dir; }
+        if (r < 0.25) { if (this.face(dir)) p.press('A'); }
+        else if (r < 0.45) { p.mx = dir; p.press('A'); }
+        else if (r < 0.57) { if (this.face(dir)) { p.my = -1; p.press('A'); } }
+        else if (r < 0.72) { if (this.face(dir)) p.press('grab'); }
+        else if (r < 0.82 && op.percent > 70) { p.cdir = { x: dir, y: 0 }; p.press('C'); }
+        else { p.mx = -dir; if (rnd() < 0.4) p.press('jump'); }
         return;
       }
       if (Math.abs(dy) < 130 && adx < 750) {
         if (!this.face(dir)) return;
-        if (rnd() < 0.55) p.press('B'); else { p.mx = dir; p.press('B'); }
+        const hs = me.moves.nspecial && me.moves.nspecial.holdShot;
+        if (hs && rnd() < 0.75) {
+          // ため撃ち：遠いほど長くためる
+          const hold = adx > 320 ? (rnd() < 0.5 ? hs.max + 2 : (rnd() * hs.max) | 0) : (rnd() * 25) | 0;
+          p.press('B'); this.plan = { type: 'holdB', t: hold + hs.f + 2 };
+        } else { p.mx = dir; p.press('B'); }
         return;
       }
       p.mx = dir * 0.8;
@@ -1166,7 +1349,8 @@ class CpuBrain {
       if (!me.grounded && dy < -60 && me.jumps > 0 && rnd() < 0.3) p.press('jump');
       if (me.grounded && Math.abs(dy) < 60) {
         if (this.style === 'mid' && adx < 260 && adx > 120 && rnd() < 0.3) { p.mx = dir; p.press('B'); }
-        if (this.style === 'rush' && adx > 200 && adx < 420 && rnd() < 0.12) { p.mx = dir; p.press('B'); }
+        if (this.style === 'rush' && !cgrab && adx > 200 && adx < 420 && rnd() < 0.12) { p.mx = dir; p.press('B'); }
+        if (cgrab && adx > 70 && adx < 190 && rnd() < 0.2) { p.mx = dir; p.press('B'); }
       }
       return;
     }
@@ -1210,12 +1394,22 @@ class Battle {
     this.cpu = new CpuBrain(this.f[1], this, level);
     this.projectiles = [];
     this.frame = 0; this.shake = 0; this.flash = 0;
+    this.cine = null; this.cineCd = 0; this.slowPhase = 0;
     this.over = false; this.overT = 0; this.winner = null;
     this.cam = { x: 0, y: -150, z: 1 }; this.prevCam = { ...this.cam };
     this.camInit = false;
   }
   other(f) { return this.f[0] === f ? this.f[1] : this.f[0]; }
   step() {
+    if (this.cineCd > 0) this.cineCd--;
+    // 強烈な一撃の演出中：一瞬止めて、そのあとスローにする
+    if (this.cine) {
+      const c = this.cine; c.t++;
+      if (c.t <= c.freeze) { this.slowPhase = 1; return; }
+      if (c.t > c.freeze + c.slow) this.cine = null;
+      else if ((c.t - c.freeze) % 2 === 0) { this.slowPhase = 1; return; }
+    }
+    this.slowPhase = 0;
     this.frame++;
     this.prevCam = { ...this.cam };
     this.cpu.step();
@@ -1257,11 +1451,22 @@ class Battle {
     if (!base) return;
     if (base.max && this.projectiles.filter(p => p.owner === owner && p.type === base.type).length >= base.max) return;
     const cm = owner.chargeMul || 1;
-    const dmg = (ev.dmg !== undefined ? ev.dmg : base.dmg) * (owner.s.dmgMul || 1) * cm;
-    const speed = (ev.speed !== undefined ? ev.speed : base.speed) * (1 + (cm - 1) * 0.35);
+    let dmg = (ev.dmg !== undefined ? ev.dmg : base.dmg) * (owner.s.dmgMul || 1) * cm;
+    let speed = (ev.speed !== undefined ? ev.speed : base.speed) * (1 + (cm - 1) * 0.35);
+    let bkb = ev.bkb !== undefined ? ev.bkb : base.bkb, kbg = ev.kbg !== undefined ? ev.kbg : base.kbg;
+    let power = 0;
+    // ため撃ち：ためた長さで、ためなし(min)〜最大ため(max2)の間の強さになる
+    const hs = ev.shot && owner.move && owner.move.holdShot;
+    if (hs) {
+      power = owner.shotT || 0;
+      const L = k => lerp(hs.min[k], hs.max2[k], power);
+      dmg = L('dmg') * (owner.s.dmgMul || 1); speed = L('speed'); bkb = L('bkb'); kbg = L('kbg');
+    }
     const o = { owner, type: base.type, r: base.r, dmg, life: base.life,
-      kang: ev.kang !== undefined ? ev.kang : base.ang, bkb: ev.bkb !== undefined ? ev.bkb : base.bkb,
-      kbg: ev.kbg !== undefined ? ev.kbg : base.kbg, grav: base.grav || 0, decel: base.decel || 0 };
+      kang: ev.kang !== undefined ? ev.kang : base.ang, bkb, kbg, grav: base.grav || 0, decel: base.decel || 0,
+      noHit: !!ev.noHit, power, big: power >= 1 };
+    if (hs) o.grav = (base.grav || 0) * (1 - power * 0.8);
+    if (base.type === 'arrow') SFX.play('shoot', power);
     if (base.type === 'shock') {
       if (!owner.grounded && owner.y < -2) return;
       const d = (ev.dir || 1) * owner.facing;
@@ -1286,13 +1491,14 @@ class Battle {
         const last = a.hitRec.get(d);
         if (last !== undefined && !(hb.rehit && a.activeF - last >= hb.rehit)) continue;
         if (hb.grab && (!d.grounded || d.state === 'down')) continue;
+        if (hb.cgrab && (d.state === 'down' || d.grabbedBy || a.grabbed)) continue;
         const wx = a.x + hb.x * a.facing, wy = a.y - hb.y;
         if (capsuleHit(d, wx, wy, hb.r)) { hits.push({ a, d, hb, wx, wy }); break; }
       }
     }
     // 飛び道具
     for (const p of this.projectiles) {
-      if (p.dead) continue;
+      if (p.dead || p.noHit) continue;
       for (const d of this.f) {
         if (d === p.owner || !d.alive) continue;
         const rw = d.activeWindow('reflect');
@@ -1303,6 +1509,7 @@ class Battle {
             if (p.type === 'disc') { p.back = false; p.vx = d.facing * 13 * 1.2; p.vy = 0; p.life = Math.max(p.life, 80); }
             else { p.vx = -p.vx * 1.15; p.vy = -p.vy * 0.6; if (sign(p.vx) !== d.facing) p.vx = -p.vx; p.life = 75; }
             this.fx.ring(p.x, p.y, '#bfe9ff', 40);
+            SFX.play('reflect');
             continue;
           }
         }
@@ -1319,6 +1526,7 @@ class Battle {
       if (!h.a.alive || !h.d.alive) continue;
       h.a.hitRec.set(h.d, h.a.activeF);
       if (h.hb.grab) { if (h.a.state === 'move') this.startGrab(h.a, h.d); continue; }
+      if (h.hb.cgrab) { if (h.a.state === 'move') this.startCmdGrab(h.a, h.d, h.hb.cgrab); continue; }
       this.applyHit(h.a, h.d, h.hb, h.a.facing, h.wx, h.wy, false);
     }
   }
@@ -1331,6 +1539,20 @@ class Battle {
     d.state = 'grabbed'; d.move = null; d.vx = d.vy = d.kbx = d.kby = 0; d.charging = false;
     d.x = a.x + a.facing * 36; d.y = a.y; d.facing = -a.facing;
     a.hitlag = d.hitlag = 4;
+    SFX.play('grab');
+  }
+  // 必殺技のつかみ（シールドでは防げない）：つかんだら専用の動きに切りかわる
+  startCmdGrab(a, d, key) {
+    if (!a.moves[key]) return;
+    if (d.grabbed) d.releaseGrab();
+    d.freeLedge();
+    a.startMove(key);
+    a.grabbed = d; d.grabbedBy = a;
+    d.state = 'grabbed'; d.move = null; d.vx = d.vy = d.kbx = d.kby = 0; d.charging = false; d.chargeMul = 1; d.activeF = -1; d.heldR = 0;
+    a.placeHeld(a.move, 0);
+    a.hitlag = d.hitlag = 6;
+    this.fx.ring(d.x, d.y - 50, '#ffd34d', 50);
+    SFX.play('grab');
   }
   applyHit(a, d, hb, dir, wx, wy, isProj, proj) {
     // カウンター
@@ -1341,6 +1563,7 @@ class Battle {
       d.invuln = 24;
       this.fx.ring(d.x, d.y - 50, '#ffffff', 80);
       this.flash = 4;
+      SFX.play('reflect');
       if (proj) proj.dead = true;
       if (!isProj && Math.abs(a.x - d.x) < 170 && Math.abs(a.y - d.y) < 150) {
         d.facing = sign(a.x - d.x);
@@ -1361,6 +1584,7 @@ class Battle {
       d.state = 'shieldstun'; d.timer = Math.floor(dmg * 0.6) + 2;
       d.kbx = dir * Math.min(8, 1.5 + dmg * 0.25);
       this.fx.ring(wx, wy, 'rgba(255,255,255,0.8)', 26);
+      SFX.play('shield');
       if (proj) proj.dead = true;
       return;
     }
@@ -1371,6 +1595,7 @@ class Battle {
       d.hitlag = hl; if (!isProj) a.hitlag = hl;
       d.armorFlash = 10;
       this.fx.spark(wx, wy, 30, '#ffb347');
+      SFX.play('armor');
       return;
     }
     // ムチ引き寄せ
@@ -1392,8 +1617,12 @@ class Battle {
     let ang = hb.ang;
     if (ang === 361) ang = d.grounded && kb < 60 ? 0 : 40;
     ang = ((ang % 360) + 360) % 360;
+    // メテオ（空中の相手を真下にたたき落とす）
+    const isMeteor = !d.grounded && ang >= 235 && ang <= 305;
+    if (isMeteor) kb = Math.max(kb, PH.meteorMinKb);
     const meteorGround = d.grounded && ang > 180 && ang < 360;
     if (meteorGround) { ang = 360 - ang; kb *= 0.8; } // 地上でメテオ → バウンド
+    const wasGrounded = d.grounded;
     if (d.grabbed) d.releaseGrab();
     if (d.grabbedBy) { const g = d.grabbedBy; g.grabbed = null; d.grabbedBy = null; if (g.state === 'holding') g.state = 'idle'; }
     d.freeLedge();
@@ -1406,14 +1635,15 @@ class Battle {
     d.move = null; d.charging = false; d.chargeMul = 1; d.activeF = -1;
     d.usedOnce = {};
     d.facing = isProj ? -dir : sign(a.x - d.x) || d.facing; // くらった側は攻撃の方を向く
-    d.hitFlash = 4;
-    const hl = Math.min(22, Math.floor(dmg * PH.hitlagMul + PH.hitlagBase) + (kb > 150 ? 4 : 0));
+    d.hitFlash = 4; d.heldR = 0;
+    let hl = Math.min(22, Math.floor(dmg * PH.hitlagMul + PH.hitlagBase) + (kb > 150 ? 4 : 0));
+    if (isMeteor) hl = Math.min(26, hl + 5);
     d.hitlag = hl; d.shakeT = hl;
     if (!isProj) a.hitlag = hl;
     // 反応の種類
     if (kb > PH.tumbleKb) {
       d.state = 'tumble'; d.timer = Math.floor(kb * PH.hitstunMul);
-    } else if ((hb.react === 'down' || (meteorGround && kb > 45)) && d.grounded) {
+    } else if ((hb.react === 'down' || (meteorGround && kb > 45)) && wasGrounded) {
       d.knockDown(); d.kbx = Math.cos(ang * DEG) * speed * dir * 0.6;
     } else {
       d.state = 'hitstun';
@@ -1423,6 +1653,38 @@ class Battle {
     this.fx.spark(wx, wy, kb, kb > 150 ? '#ffd34d' : '#ffffff');
     if (kb > 110) this.shake = Math.max(this.shake, Math.min(14, (kb - 100) * 0.07));
     if (kb > 170) this.flash = Math.max(this.flash, 3);
+    SFX.play(kb < 60 ? 'hitL' : kb < 130 ? 'hitM' : 'hitH');
+    if (isMeteor) { this.fx.meteor(wx, wy); this.shake = Math.max(this.shake, 8); SFX.play('meteor'); }
+    // 「ガツン」と強烈な一撃が決まったときの演出（撃墜が決まったという意味ではない）
+    const offstage = Math.abs(d.x) > ST.halfWidth + 5 || d.y > 5;
+    const strong = (isMeteor && offstage) || this.predictKO(d) || (d.percent >= PH.cineStrongPct && kb >= PH.cineStrongKb);
+    if (strong && this.cineCd <= 0) this.startCine(wx, wy, hl, isMeteor);
+  }
+  // このまま飛んでいったら場外に出そうか、ざっくり計算する（ふんばりや復帰は考えない）
+  predictKO(d) {
+    const z = ST.blast;
+    let x = d.x, y = d.y, vy = 0, kx = d.kbx, ky = d.kby;
+    const sp0 = Math.hypot(kx, ky);
+    const n = Math.min(200, Math.ceil(sp0 / PH.kbDecay) + 6);
+    for (let i = 0; i < n; i++) {
+      vy = Math.min(vy + d.s.gravity, d.s.fall);
+      const sp = Math.hypot(kx, ky);
+      if (sp > 0) { const ns = Math.max(0, sp - PH.kbDecay); kx *= ns / sp; ky *= ns / sp; }
+      const py = y;
+      x += kx; y += vy + ky;
+      if (py <= 0 && y >= 0 && Math.abs(x) <= ST.halfWidth) return false; // ステージに落ちる
+      if (y > 0 && y < ST.thickness && Math.abs(x) <= ST.halfWidth) return false;
+      if (x < z.left || x > z.right || y > z.bottom || y < z.top) return true;
+    }
+    return false;
+  }
+  startCine(x, y, hl, meteor) {
+    const lines = [];
+    for (let i = 0; i < 26; i++) lines.push({ a: rnd() * Math.PI * 2, w: 0.012 + rnd() * 0.03, l: 0.55 + rnd() * 0.5 });
+    this.cine = { t: 0, x, y, freeze: 6, slow: hl * 2 + 26, lines, meteor };
+    this.cineCd = PH.cineCooldown;
+    this.flash = Math.max(this.flash, 4);
+    SFX.play('cine');
   }
   checkKO() {
     const z = ST.blast;
@@ -1432,6 +1694,7 @@ class Battle {
         const cx = clamp(f.x, z.left, z.right), cy = clamp(f.y, z.top, z.bottom);
         this.fx.ko(cx, cy, f.color);
         this.shake = 16; this.flash = 6;
+        SFX.play('ko');
         if (f.grabbed) f.releaseGrab();
         f.freeLedge();
         f.stocks--; f.state = 'dead'; f.timer = 70; f.move = null; f.kbx = f.kby = f.vx = f.vy = 0; f.trail = [];
@@ -1697,7 +1960,11 @@ function render(b, alpha) {
   else ctx.drawImage(layers.bg, 0, 0);
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   if (!b) { if (window.Render3D && window.Render3D.ready) window.Render3D.hide(); return; }
+  const tick = alpha;
+  if (b.cine) alpha = b.cine.t <= b.cine.freeze ? 1 : (b.slowPhase + alpha) / 2; // スロー中もなめらかに
   const cam = { x: lerp(b.prevCam.x, b.cam.x, alpha), y: lerp(b.prevCam.y, b.cam.y, alpha), z: lerp(b.prevCam.z, b.cam.z, alpha) };
+  const cw = cineWeight(b, tick);
+  if (cw > 0) { cam.x = lerp(cam.x, b.cine.x, cw * 0.8); cam.y = lerp(cam.y, b.cine.y + 20, cw * 0.8); cam.z *= 1 + 0.75 * cw; }
   let sx = 0, sy = 0;
   if (b.shake > 0) { sx = (rnd() - 0.5) * b.shake * 2; sy = (rnd() - 0.5) * b.shake * 2; }
   if (use3D) {
@@ -1719,9 +1986,49 @@ function render(b, alpha) {
   for (const f of b.f) drawTrail(f, X, Y, z);
   drawFX(b.fx, X, Y, z);
   if (DEBUG) drawDebug(b, X, Y, z);
+  if (cw > 0) drawCine(b, X, Y, z, cw, tick);
   if (b.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.05})`; ctx.fillRect(0, 0, W, H); }
   drawHUD(b);
   drawControls();
+}
+// 強烈な一撃の演出の強さ（0〜1）：すっと寄って、最後にゆっくり戻る
+function cineWeight(b, tick) {
+  const c = b.cine;
+  if (!c) return 0;
+  const t = c.t + (tick || 0), end = c.freeze + c.slow;
+  const up = clamp(t / 4, 0, 1), down = clamp((end - t) / 16, 0, 1);
+  return ease(Math.min(up, down));
+}
+function drawCine(b, X, Y, z, w, tick) {
+  const c = b.cine, W = view.w, H = view.h;
+  const x = X(c.x), y = Y(c.y), R = Math.hypot(W, H);
+  // まわりを暗くして、当たったところに目を向ける
+  const g = ctx.createRadialGradient(x, y, R * 0.08, x, y, R * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,10,${0.55 * w})`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // 集中線
+  ctx.fillStyle = c.meteor ? `rgba(255,190,90,${0.5 * w})` : `rgba(255,255,255,${0.45 * w})`;
+  const wob = (c.t + tick) * 0.02;
+  for (const L of c.lines) {
+    const a = L.a + wob * 0.1, r0 = R * (0.16 + (1 - L.l) * 0.2), r1 = R;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    ctx.lineTo(x + Math.cos(a - L.w) * r1, y + Math.sin(a - L.w) * r1);
+    ctx.lineTo(x + Math.cos(a + L.w) * r1, y + Math.sin(a + L.w) * r1);
+    ctx.closePath(); ctx.fill();
+  }
+  // 当たった瞬間の光
+  const t = c.t + tick;
+  if (t < 14) {
+    const u = t / 14;
+    ctx.globalAlpha = 1 - u;
+    ctx.fillStyle = c.meteor ? '#ffcf7a' : '#ffffff';
+    ctx.beginPath(); ctx.arc(x, y, (30 + 90 * u) * Math.max(0.6, z), 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // 画面の上下の帯（映画のような雰囲気）
+  const bar = H * 0.07 * w;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
 }
 function drawStage(X, Y, z) {
   const L = -ST.halfWidth, R = ST.halfWidth, T = 0, Bt = ST.thickness;
@@ -1737,10 +2044,19 @@ function drawStage(X, Y, z) {
   ctx.fillStyle = '#e6e9ff';
   for (const ex of [L, R]) { ctx.beginPath(); ctx.arc(X(ex), Y(T) + 1, Math.max(2, 3.5 * z), 0, Math.PI * 2); ctx.fill(); }
 }
+function mixHex(a, b, t) {
+  const p = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const A = p(a), B = p(b);
+  return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
 function fighterLook(f) {
   let col = f.color, dark = f.dark;
   if (f.hitFlash > 0) { col = '#ffffff'; dark = '#e8e8e8'; }
   else if (f.armorFlash > 0 && Math.floor(f.armorFlash / 2) % 2 === 0) { col = '#ffb347'; dark = '#d9862a'; }
+  else if (f.charging && f.move && f.move.holdShot) {
+    // ため撃ち：最大までたまったら、ゆっくり光る（チカチカさせない）
+    if (f.shotT >= 1) { const k = 0.35 + 0.25 * Math.sin(f.anim * 0.18); col = mixHex(col, '#fff2b0', k); dark = mixHex(dark, '#e8d27a', k); }
+  }
   else if (f.charging && Math.floor(f.anim / 3) % 2 === 0) { col = '#ffffff'; dark = '#dddddd'; }
   else if (f.state === 'dizzy' && Math.floor(f.anim / 6) % 2 === 0) col = '#ffe066';
   return { col, dark };
@@ -1751,7 +2067,7 @@ function drawFighter(f, alpha, X, Y, z) {
   if (f.invuln > 0 && f.state !== 'move' && Math.floor(f.invuln / 4) % 2 === 0) ctx.globalAlpha = 0.5;
   let x = lerp(f.px, f.x, alpha), y = lerp(f.py, f.y, alpha);
   if (f.hitlag > 0 && f.shakeT > 0) x += (rnd() - 0.5) * 6;
-  if (f.charging) x += (rnd() - 0.5) * 2;
+  if (f.charging && !(f.move && f.move.holdShot)) x += (rnd() - 0.5) * 2;
   const pose = interpPose(f, alpha);
   const pts = solvePose(pose, f.look, f.grounded, f.state === 'down');
   const fc = f.facing;
@@ -1844,6 +2160,8 @@ function drawTrail(f, X, Y, z) {
 function drawProjectile(p, alpha, X, Y, z) {
   const x = X(lerp(p.px, p.x, alpha)), y = Y(lerp(p.py, p.y, alpha));
   const col = p.owner.color;
+  if (p.noHit) ctx.globalAlpha = 0.45;
+  if (p.big) { ctx.fillStyle = 'rgba(255,233,168,0.35)'; ctx.beginPath(); ctx.arc(x, y, 16 * z, 0, Math.PI * 2); ctx.fill(); }
   if (p.type === 'arrow') {
     const a = Math.atan2(p.vy, p.vx), c = Math.cos(a), s = Math.sin(a), L = 28 * z;
     ctx.strokeStyle = '#f3e3c0'; ctx.lineWidth = Math.max(1.5, 2.5 * z); ctx.lineCap = 'round';
@@ -1860,6 +2178,7 @@ function drawProjectile(p, alpha, X, Y, z) {
     ctx.fillStyle = 'rgba(255,160,60,0.85)';
     ctx.beginPath(); ctx.moveTo(x - 14 * z, y); ctx.lineTo(x - 5 * z, y - h * 0.7); ctx.lineTo(x, y - h); ctx.lineTo(x + 6 * z, y - h * 0.6); ctx.lineTo(x + 14 * z, y); ctx.closePath(); ctx.fill();
   }
+  ctx.globalAlpha = 1;
 }
 function drawFX(fx, X, Y, z) {
   for (const e of fx.list) {
@@ -1877,6 +2196,14 @@ function drawFX(fx, X, Y, z) {
     } else if (e.k === 'ring') {
       ctx.globalAlpha = 1 - u; ctx.strokeStyle = e.color; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(X(e.x), Y(e.y), e.size * z * (0.4 + u), 0, Math.PI * 2); ctx.stroke();
+    } else if (e.k === 'meteor') {
+      // 下向きの衝撃（メテオ）
+      const x = X(e.x), y = Y(e.y), L = (60 + u * 120) * z;
+      ctx.globalAlpha = 1 - u;
+      ctx.fillStyle = '#ffb13b';
+      ctx.beginPath(); ctx.moveTo(x - 26 * z * (1 - u), y); ctx.lineTo(x + 26 * z * (1 - u), y); ctx.lineTo(x, y + L); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#fff3c4'; ctx.lineWidth = Math.max(1.5, 3 * z);
+      for (const dx of [-18, 0, 18]) { ctx.beginPath(); ctx.moveTo(x + dx * z, y - 10 * z); ctx.lineTo(x + dx * 1.6 * z, y + L * 0.8); ctx.stroke(); }
     } else if (e.k === 'ko') {
       ctx.globalAlpha = 1 - u;
       const x = X(e.x), y = Y(e.y), cx = view.w / 2, cy = view.h / 2;
@@ -1933,13 +2260,15 @@ function hudPanel(f) {
   hudCache.set(f.slot, { key, canvas: cv });
   return cv;
 }
+// ％とストックは画面の下（移動スティックとボタンの間）
 function drawHUD(b) {
-  const W = view.w, t = view.inset.t + 8;
-  const boxW = 150, gap = 16, x0 = W / 2 - boxW - gap / 2;
-  b.f.forEach((f, i) => {
-    const x = x0 + i * (boxW + gap);
-    ctx.drawImage(hudPanel(f), x, t, boxW, 50);
-  });
+  const W = view.w, H = view.h, ins = view.inset;
+  const left = ins.l + 30 + D.controls.stickRadius * 2 + 22, right = W - ins.r - 252;
+  const gap = 10, avail = right - left;
+  const boxW = clamp((avail - gap) / 2, 96, 150), boxH = boxW / 3;
+  const mid = avail >= boxW * 2 + gap ? (left + right) / 2 : W / 2;
+  const x0 = mid - boxW - gap / 2, y = H - ins.b - boxH - 8;
+  b.f.forEach((f, i) => ctx.drawImage(hudPanel(f), x0 + i * (boxW + gap), y, boxW, boxH));
 }
 function drawControls() {
   const c = controls;
@@ -1983,7 +2312,7 @@ function drawControls() {
 const $ = id => document.getElementById(id);
 const state = {
   screen: 'title', battle: null, paused: false, p1: 0, cpu: 1,
-  showFps: store.get('showFps', false), mode: store.get('mode', '2d'), level: store.get('cpuLevel', D.cpu.default),
+  showFps: store.get('showFps', false), mode: '3d', level: store.get('cpuLevel', D.cpu.default),
 };
 function show(id) {
   for (const s of ['title', 'select', 'pause', 'result']) $(s).classList.toggle('show', s === id);
@@ -2025,31 +2354,15 @@ function pause() {
 controls.onPause = pause;
 function updateMenuLabels() {
   $('btnFps').textContent = `fps表示：${state.showFps ? 'オン' : 'オフ'}`;
-  const m = state.mode === '3d' ? '3D（テスト）' : '2D';
-  $('btnMode').textContent = `表示：${m}`;
-  $('btnMode2').textContent = `表示：${m}`;
 }
-// 3D表示（テスト）は、選んだときだけ読み込む
-let loading3D = null;
-function ensure3D() {
-  if (window.Render3D && window.Render3D.ready) return Promise.resolve();
-  if (loading3D) return loading3D;
-  const load = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-  loading3D = load('three.min.js')
-    .then(() => load('render3d.js'))
-    .then(() => { window.Render3D.init(view); })
-    .catch(() => { loading3D = null; state.mode = '2d'; store.set('mode', '2d'); updateMenuLabels(); $('modeNote').textContent = '3D表示を読み込めませんでした。2D表示に戻しました。'; });
-  return loading3D;
-}
-function toggleMode() {
-  state.mode = state.mode === '3d' ? '2d' : '3d';
-  store.set('mode', state.mode);
-  updateMenuLabels();
-  if (state.mode === '3d') ensure3D();
+// 3D表示の準備（もしこの端末で3Dが使えないときだけ、平面の表示で動かす）
+function init3D() {
+  try {
+    if (!window.THREE || !window.Render3D) throw new Error('3D files missing');
+    window.Render3D.init(view);
+  } catch (e) { state.mode = '2d'; }
 }
 $('btnStart').addEventListener('click', () => { buildCards(); show('select'); state.screen = 'select'; });
-$('btnMode').addEventListener('click', toggleMode);
-$('btnMode2').addEventListener('click', toggleMode);
 $('btnBack').addEventListener('click', () => { show('title'); state.screen = 'title'; });
 $('btnFight').addEventListener('click', startBattle);
 $('btnResume').addEventListener('click', () => { state.paused = false; show(null); acc = 0; });
@@ -2060,7 +2373,6 @@ $('btnAgain').addEventListener('click', startBattle);
 $('btnResSelect').addEventListener('click', () => { state.battle = null; state.screen = 'select'; buildCards(); show('select'); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 updateMenuLabels();
-if (state.mode === '3d') ensure3D();
 
 // 画面の更新が追いつかないときは、自動で画質（解像度）を少し下げて60fpsを保つ
 let acc = 0, last = performance.now(), fpsCount = 0, fpsT = 0, fpsNow = 60, lowT = 0;
@@ -2097,6 +2409,7 @@ resize();
 requestAnimationFrame(frame);
 
 // 3D表示や動作確認で使う共有の部品
-const api = { state, D, Battle, CpuBrain, Fighter, startBattle, calcKB, POSES, solvePose, lerpPose, interpPose, fighterLook, lerp, clamp, ST, PH, view };
+const api = { state, D, Battle, CpuBrain, Fighter, startBattle, calcKB, POSES, solvePose, lerpPose, interpPose, fighterLook, lerp, clamp, ST, PH, view, SFX };
 window.__game = api;
+init3D();
 })();
