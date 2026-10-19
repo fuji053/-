@@ -109,6 +109,13 @@ const SFX = (() => {
     quake() { noise(0.4, 0.75, 500, 60, 0.6, 'lowpass'); tone('sine', 75, 35, 0.4, 0.7); },
     swing(p){ noise(0.1 + p * 0.06, 0.12 + p * 0.18, 500, 2200, 1.4); },
     tech()  { tone('triangle', 600, 900, 0.07, 0.15); },
+    gun(p)  { noise(0.06, 0.45 + p * 0.3, 3500, 900, 0.9); tone('square', 520 - p * 200, 90, 0.07, 0.15 + p * 0.15); },
+    slash() { noise(0.16, 0.35, 1800, 6000, 2.2, 'bandpass'); tone('triangle', 1400, 600, 0.12, 0.08); },
+    puff()  { noise(0.45, 0.4, 900, 200, 0.5, 'lowpass'); },
+    boom()  { noise(0.5, 0.95, 1600, 90, 0.6, 'lowpass'); tone('sine', 110, 30, 0.5, 0.9); tone('square', 160, 50, 0.18, 0.15); },
+    wire()  { noise(0.12, 0.25, 4000, 8000, 3, 'highpass'); tone('triangle', 1800, 900, 0.1, 0.08); },
+    zap()   { tone('sawtooth', 1400, 300, 0.16, 0.18); noise(0.18, 0.35, 5000, 2000, 2.5); tone('square', 2200, 800, 0.1, 0.06, 0.05); },
+    change(){ tone('sine', 660, 1320, 0.22, 0.22); noise(0.3, 0.3, 3000, 8000, 1, 'highpass', 0.05); },
   };
   return {
     unlock,
@@ -264,6 +271,37 @@ const POSES = {
   divingElbow:  P(0, 10, 150, 30, 125, 20, -60, -10, -60, 60),
   germanWind:   P(10, 80, 30, 80, 30, 50, -60, -30, -20),
   germanBridge: Object.assign(P(-30, 150, 20, 150, 20, 60, -100, 40, -110, -110), { pa: 1 }),
+  // 狐の剣士（刀は前の手に持ち、前腕の向きに伸びる）
+  kReady:       P(12, 55, 70, 40, 90, 25, -30, -25, -12, 0, 0.2),
+  kSlashWind:   P(-8, 150, 30, 120, 50, 30, -35, -25, -10, 0, -0.6),
+  kSlash:       P(25, 80, 0, 30, 60, 45, -45, -35, -5, 0, 0.7),
+  kSlashLow:    P(30, 40, 0, 10, 60, 50, -60, -35, -5, 0, 0.8),
+  kRise:        P(5, 140, 0, 40, 70, 30, -30, -25, -10, 0, -0.4),
+  kThrustWind:  P(5, 40, 120, 30, 110, 35, -45, -25, -15, 0, -0.7),
+  kThrust:      P(30, 75, 0, -40, 60, 70, -60, -40, 0, 0, 0.9),
+  kUpWind:      P(15, 20, 30, 20, 60, 50, -70, -15, -40, 0, -0.3),
+  kUpArc:       P(-10, 175, 0, 60, 80, 20, -20, -20, -10, 0, 0.3),
+  kBack:        P(5, -100, 0, 40, 80, 30, -30, -25, -10, 0, -0.3),
+  kLowWind:     P(30, -75, 0, 20, 60, 72, -118, -10, -92, 0, -0.6),
+  kLowSweep:    P(36, 25, 0, 10, 60, 72, -118, -10, -92, 0, 0.7),
+  iaiWind:      Object.assign(P(28, 20, 100, 30, 110, 75, -115, -25, -60, 0, -1), { wr: 180 }),
+  iaiSlash:     P(32, 68, 0, -60, 30, 85, -70, -45, -5, 0, 1),
+  kDownThrust:  P(0, 10, 0, 20, 10, 40, -80, 10, -80),
+  kCounter:     P(-5, 50, 100, 40, 110, 30, -40, -28, -10, 0, -0.3),
+  kDive:        P(30, 50, 0, 40, 20, 30, -60, -20, -40),
+  // エージェント（ピストルとワイヤーを使うスパイ）
+  gunAim:       P(2, 90, 0, 80, 15, 28, -22, -26, -10, 0, 0.2),
+  gunFire:      P(-4, 108, 0, 98, 15, 28, -22, -26, -10, 0, 0.1),
+  wireThrow:    P(10, 100, 0, -20, 60, 30, -30, -25, -10, 0, 0.5),
+  wireUp:       P(-5, 160, 0, 40, 60, 30, -60, -10, -40),
+  placeMine:    P(55, 0, 20, 20, 80, 85, -130, -15, -100),
+  splitKick:    Object.assign(P(5, 120, 0, 120, 0, 100, 0, -100, 0), { pa: 0 }),
+  heelDrop:     P(-10, 60, 60, 60, 60, 150, 0, -10, -20),
+  heelDropDown: P(15, 40, 40, 40, 40, 30, 0, -15, -20),
+  // 覚醒の演出（サングラスを外す）
+  shadeGrab:    P(2, 150, 150, -8, 35, 18, -18, -18, -8, 0, 0.3),
+  shadeOff:     P(-6, 75, 15, -8, 35, 18, -18, -18, -8, 0, -0.4),
+  poseCool:     P(-3, 25, 25, -25, 115, 14, -12, -22, -6, 0, 0.35),
 };
 function lerpPose(a, b, t, out) {
   const o = out || {};
@@ -283,6 +321,7 @@ function catmull(p0, p1, p2, p3, u, out) {
 }
 
 const SK = { thigh: 24, shin: 23, torso: 30, upper: 18, fore: 17 };
+const KATANA_LEN = 42; // 刀の長さ（大きさ1のとき。狐は0.8倍で約34）
 function dirv(a) { const r = a * DEG; return [Math.sin(r), -Math.cos(r)]; }
 // ポーズ → 関節の位置（前向き・上がプラスの座標。足元が原点）
 function solvePose(p, look, plant, plantAll) {
@@ -308,6 +347,9 @@ function solvePose(p, look, plant, plantAll) {
   const [fK, fF] = limb(fHp, p.fl1, fl2, SK.thigh, SK.shin);
   const [bK, bF] = limb(bHp, p.bl1, bl2, SK.thigh, SK.shin);
   const pts = { H, N, S, fS, bS, fHp, bHp, head, eye, fE, fH, bE, bH, fK, fF, bK, bF };
+  const sc = look.scale || 1; // 小さいキャラ（狐の剣士など）は骨組みごと縮める
+  if (sc !== 1) for (const k in pts) { if (k === 'head' || k === 'eye') continue; pts[k] = [pts[k][0] * sc, pts[k][1] * sc]; }
+  if (sc !== 1) { const dx = pts.N[0] - N[0], dy = pts.N[1] - N[1]; head[0] += dx; head[1] += dy; eye[0] += dx; eye[1] += dy; }
   if (p.r) {
     const th = -p.r * DEG, c = Math.cos(th), s = Math.sin(th);
     for (const k in pts) {
@@ -375,6 +417,7 @@ function buildMoves(c) {
   for (const k in (c.throws || {})) moves[k] = clone(c.throws[k]);
   for (const k in c.specials) moves[SPECIAL_KEYS[k]] = clone(c.specials[k]);
   for (const k in (c.extraMoves || {})) moves[k] = clone(c.extraMoves[k]);
+  for (const k in (c.replaceMoves || {})) moves[k] = clone(c.replaceMoves[k]); // 覚醒などで丸ごと入れかえる技
   for (const k in (c.overrides || {})) {
     const key = SPECIAL_KEYS[k] || k;
     if (moves[key]) moves[key] = deepMerge(moves[key], c.overrides[k]);
@@ -422,7 +465,19 @@ const SPRING = {
 class Fighter {
   constructor(c, slot, battle) {
     this.c = c; this.s = tempoStats(c.stats); this.slot = slot; this.b = battle;
-    this.moves = buildMoves(c);
+    this.moves = this.movesBase = buildMoves(c);
+    this.projs = c.projectiles || {};
+    // 覚醒（％が高くなると強化版の技に変わるキャラ）
+    if (c.awaken) {
+      const aw = c.awaken;
+      this.cAwake = Object.assign({}, c, {
+        stats: Object.assign({}, c.stats, { dmgMul: (c.stats.dmgMul || 1) * (aw.dmgMul || 1), speed: (c.stats.speed || 1) * (aw.speedMul || 1) }),
+        specials: Object.assign({}, c.specials, aw.specials || {}),
+        replaceMoves: aw.moves || {},
+        projectiles: Object.assign({}, c.projectiles, aw.projectiles || {}),
+      });
+      this.movesAwake = buildMoves(this.cAwake);
+    }
     this.look = c.look || { thick: 6, head: 10 };
     this.color = slot === 0 ? '#ff5d5d' : '#4fa8ff';
     this.dark = slot === 0 ? '#b8363b' : '#2c6fb3';
@@ -455,6 +510,14 @@ class Fighter {
     this.trail = []; this.trailJoint = null;
   }
   get alive() { return this.state !== 'dead'; }
+  setAwake(on) {
+    if (!this.cAwake || !!this.awake === on) return;
+    this.awake = on;
+    const c = on ? this.cAwake : this.c;
+    this.moves = on ? this.movesAwake : this.movesBase;
+    this.s = tempoStats(c.stats);
+    this.projs = c.projectiles || {};
+  }
   hittable() {
     if (!this.alive || this.invuln > 0 || this.state === 'grabbed') return false;
     if (this.activeWindow('invulnW')) return false;
@@ -667,7 +730,7 @@ class Fighter {
     }
     if ((key === 'grab' || key === 'uspecial' || key === 'uspecialAir') && pad && Math.abs(pad.mx) > 0.25) this.facing = sign(pad.mx);
     this.state = 'move'; this.move = m; this.mf = 0; this.activeF = -1;
-    this.hitRec = new Map(); this.loops = 0;
+    this.hitRec = new Map(); this.loops = 0; this.pullTarget = null;
     this.chargeT = 0; this.chargeMul = 1; this.charging = false; this.chargeDone = false; this.shotT = 0;
     this.chargeBtn = btn || 'A';
     this.moveAir = !this.grounded;
@@ -1081,6 +1144,23 @@ class Fighter {
     return get(k[k.length - 1]);
   }
   updateWhipTip() {
+    // ワイヤー（エージェント）：技の間だけ、手からフックまでワイヤーをのばす
+    const m = this.state === 'move' ? this.move : null;
+    if (m && m.wire) {
+      const f = this.activeF >= 0 ? this.activeF : 0, [w0, w1] = m.wire;
+      let tx, ty;
+      if (m.wireTip) { tx = m.wireTip[0]; ty = m.wireTip[1]; }
+      else { const far = m.hits.reduce((a, h) => (Math.abs(h.x) > Math.abs(a.x) ? h : a), m.hits[0]); tx = far.x; ty = far.y; }
+      if (!this.wireOn) { this.wireOn = true; this.tip = this.hand.slice(); SFX.play('wire'); }
+      // 出る（4コマ）→ 止まる → 戻る（6コマ）
+      const out = clamp((f - w0) / 4, 0, 1), back = clamp((f - w1) / 6, 0, 1), k = f < w0 ? 0 : out * (1 - back);
+      const end = [this.x + tx * this.facing, this.y - ty];
+      if (this.pullTarget && this.pullTarget.alive) { end[0] = this.pullTarget.x; end[1] = this.pullTarget.y - 50 * (this.pullTarget.look.scale || 1); }
+      this.tip = [lerp(this.hand[0], end[0], k), lerp(this.hand[1], end[1], k)];
+      this.wireK = k;
+      return;
+    }
+    if (this.wireOn) { this.wireOn = false; this.wireK = 0; }
     if (this.c.weapon !== 'whip') return;
     let target = [this.hand[0] - this.facing * 10, this.hand[1] + 30];
     const hs = this.activeHits();
@@ -1112,9 +1192,10 @@ class Fighter {
       else {
         const q = pts[this.trailJoint];
         let ex = 0, ey = 0;
-        if (this.trailJoint === 'fH' && (this.c.weapon === 'bow' || this.c.weapon === 'mirror')) {
+        if (this.trailJoint === 'fH' && (this.c.weapon === 'bow' || this.c.weapon === 'mirror' || this.c.weapon === 'katana')) {
           const e = pts.fE, dx = q[0] - e[0], dy = q[1] - e[1], l = Math.hypot(dx, dy) || 1;
-          ex = dx / l * 14; ey = dy / l * 14;
+          const L = this.c.weapon === 'katana' ? KATANA_LEN * (this.look.scale || 1) : 14; // 刀は刀の先の軌跡
+          ex = dx / l * L; ey = dy / l * L;
         }
         p = [this.x + (q[0] + ex) * this.facing, this.y - (q[1] + ey)];
       }
@@ -1128,7 +1209,7 @@ class Fighter {
    飛び道具
    ===================================================================== */
 class Projectile {
-  constructor(o) { Object.assign(this, o); this.hitRec = new Set(); this.age = 0; this.dead = false; this.px = this.x; this.py = this.y; }
+  constructor(o) { Object.assign(this, o); this.hitRec = new Map(); this.age = 0; this.dead = false; this.px = this.x; this.py = this.y; }
   update(b) {
     this.px = this.x; this.py = this.y; this.age++;
     if (--this.life <= 0) { this.dead = true; return; }
@@ -1152,6 +1233,30 @@ class Projectile {
     } else if (this.type === 'shock') {
       this.x += this.vx;
       if (Math.abs(this.x) > ST.halfWidth) this.dead = true;
+    } else if (this.type === 'bullet' || this.type === 'wave') {
+      if (this.type === 'wave') { this.vx *= 0.96; }
+      this.x += this.vx; this.y += this.vy;
+      if (this.y >= 0 && this.y < ST.thickness && Math.abs(this.x) <= ST.halfWidth) { this.dead = true; b.fx.dust(this.x, 0, 0.3); }
+    } else if (this.type === 'mine') {
+      // 地雷：ステージの上なら床に置かれる。外なら落ちていく
+      if (!this.onGround) {
+        this.vy = Math.min(this.vy + 0.6, 14); this.y += this.vy;
+        if (this.y >= 0 && this.py <= 0 && Math.abs(this.x) <= ST.halfWidth) { this.y = 0; this.vy = 0; this.onGround = true; }
+        if (this.y > 700) this.dead = true;
+      }
+      this.armed = this.age >= this.arm;
+    } else if (this.type === 'smoke') {
+      // 煙幕弾：飛んでいって、地面か一定時間で煙になる
+      if (!this.cloud) {
+        this.vy += this.grav; this.x += this.vx; this.y += this.vy;
+        const hitFloor = this.y >= 0 && this.py <= 0 && Math.abs(this.x) <= ST.halfWidth;
+        if (hitFloor || this.age > 26) {
+          if (hitFloor) this.y = -10;
+          this.cloud = true; this.vx = this.vy = 0; this.r = this.cloudR || 55; this.life = Math.min(this.life, this.cloudLife || 120);
+          b.fx.ring(this.x, this.y - 20, '#9aa3b8', 70); SFX.play('puff');
+        }
+        if (this.y > 700) this.dead = true;
+      }
     }
   }
 }
@@ -1184,9 +1289,10 @@ function calcKB(p, d, w, bkb, kbg) {
   return ((p / 10 + (p * d) / 20) * (200 / (w + 100)) * 1.4 + 18) * (kbg / 100) + bkb;
 }
 function capsuleHit(f, x, y, r) {
-  let ax = f.x, ay = f.y - 10, bx = f.x, by = f.y - 82, rr = 15;
-  if (f.state === 'down') { ax = f.x - 36; ay = f.y - 8; bx = f.x + 36; by = f.y - 8; rr = 10; }
-  if (f.state === 'ledge') { ay = f.y - 30; by = f.y - 105; }
+  const s = f.look.scale || 1; // 小さいキャラは、くらう範囲も小さい
+  let ax = f.x, ay = f.y - 10 * s, bx = f.x, by = f.y - 82 * s, rr = 15 * Math.sqrt(s);
+  if (f.state === 'down') { ax = f.x - 36 * s; ay = f.y - 8; bx = f.x + 36 * s; by = f.y - 8; rr = 10; }
+  if (f.state === 'ledge') { ay = f.y - 30 * s; by = f.y - 105 * s; }
   const vx = bx - ax, vy = by - ay;
   const t = clamp(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy), 0, 1);
   const dx = x - (ax + vx * t), dy = y - (ay + vy * t);
@@ -1301,14 +1407,15 @@ class CpuBrain {
     const opAttacking = op.state === 'move' && op.move.hits && op.activeF < (op.move.hits[0].f[0] + 2);
     // 守り
     if (me.grounded && opAttacking && adx < 150 && Math.abs(dy) < 100) {
-      if (this.style === 'counter' && rnd() < 0.45) { p.my = -1; p.press('B'); return; }
+      const counterer = this.style === 'counter' || (me.c.cpu && me.c.cpu.counter);
+      if (counterer && rnd() < (this.style === 'counter' ? 0.45 : 0.28)) { if (this.face(dir)) { p.my = -1; p.press('B'); } return; }
       if (rnd() < cfg.shieldChance) { this.plan = { type: 'shield', t: 12 + ((rnd() * 14) | 0) }; return; }
     }
     // 飛び道具を跳ね返す
     const reflector = this.style === 'counter' || (me.c.cpu && me.c.cpu.reflect);
     if (reflector) {
       for (const pr of this.b.projectiles) {
-        if (pr.owner !== me && !pr.noHit && pr.type !== 'shock' && Math.abs(pr.x - me.x) < 180 && Math.abs(pr.y - (me.y - 50)) < 80 && sign(pr.vx) === -sign(pr.x - me.x)) {
+        if (pr.owner !== me && !pr.noHit && ['arrow', 'bullet', 'wave', 'disc'].includes(pr.type) && Math.abs(pr.x - me.x) < 180 && Math.abs(pr.y - (me.y - 50)) < 80 && sign(pr.vx) === -sign(pr.x - me.x)) {
           if (this.face(sign(pr.x - me.x))) { if (this.style !== 'counter') p.my = -1; p.press('B'); }
           return;
         }
@@ -1345,6 +1452,11 @@ class CpuBrain {
         else { p.mx = -dir; if (rnd() < 0.4) p.press('jump'); }
         return;
       }
+      // 地雷をしかける（1個まで）
+      if (me.c.cpu && me.c.cpu.mine && me.grounded && adx > 200 && rnd() < 0.18 &&
+          !this.b.projectiles.some(q => q.maker === me && q.type === 'mine')) { p.my = -1; p.press('B'); return; }
+      // ワイヤーで引き寄せる
+      if (me.moves.sspecial && me.moves.sspecial.wire && me.grounded && adx > 100 && adx < 165 && Math.abs(dy) < 40 && rnd() < 0.3) { p.mx = dir; p.press('B'); return; }
       if (Math.abs(dy) < 130 && adx < 750) {
         if (!this.face(dir)) return;
         const hs = me.moves.nspecial && me.moves.nspecial.holdShot;
@@ -1367,6 +1479,7 @@ class CpuBrain {
       if (!me.grounded && dy < -60 && me.jumps > 0 && rnd() < 0.3) p.press('jump');
       if (me.grounded && Math.abs(dy) < 60) {
         if (this.style === 'mid' && adx < 260 && adx > 120 && rnd() < 0.3) { p.mx = dir; p.press('B'); }
+        else if (this.style === 'mid' && adx < 330 && adx > 140 && rnd() < 0.15 && me.moves.nspecial && me.moves.nspecial.events && me.facing === dir) { p.mx = 0; p.press('B'); }
         if (this.style === 'rush' && !cgrab && adx > 200 && adx < 420 && rnd() < 0.12) { p.mx = dir; p.press('B'); }
         if (cgrab && adx > 70 && adx < 190 && rnd() < 0.2) { p.mx = dir; p.press('B'); }
       }
@@ -1412,7 +1525,7 @@ class Battle {
     this.cpu = new CpuBrain(this.f[1], this, level);
     this.projectiles = [];
     this.frame = 0; this.shake = 0; this.flash = 0;
-    this.cine = null; this.cineCd = 0; this.slowPhase = 0;
+    this.cine = null; this.cineCd = 0; this.slowPhase = 0; this.awaken = null;
     this.over = false; this.overT = 0; this.winner = null;
     this.cam = { x: 0, y: -150, z: 1 }; this.prevCam = { ...this.cam };
     this.camInit = false;
@@ -1427,6 +1540,7 @@ class Battle {
       if (c.t > c.freeze + c.slow) this.cine = null;
       else if ((c.t - c.freeze) % 2 === 0) { this.slowPhase = 1; return; }
     }
+    if (this.awaken) { this.slowPhase = 0; this.stepAwaken(); return; }
     this.slowPhase = 0;
     this.frame++;
     this.prevCam = { ...this.cam };
@@ -1443,6 +1557,7 @@ class Battle {
     this.projectiles = this.projectiles.filter(p => !p.dead);
     this.pushApart();
     this.resolveHits();
+    this.updateOutfits();
     this.checkKO();
     this.updateCamera();
     this.fx.update();
@@ -1455,6 +1570,60 @@ class Battle {
     for (const f of this.f) f.pad.tick();
     if (this.over) this.overT++;
   }
+  // ％が一定を超えると姿が変わるキャラ（エージェント：ジャケットとサングラスがとれて覚醒する）
+  updateOutfits() {
+    for (const f of this.f) {
+      if (!f.c.model2 && !f.c.awaken) continue;
+      const want = f.alive && f.percent >= (f.c.swapPct || 100);
+      if (want === !!f.outfit2 || (this.awaken && this.awaken.f === f)) continue;
+      if (want) {
+        // このまま撃墜されそうなときは演出を出さずに変わる
+        if (f.c.awaken && !this.predictKO(f)) { this.startAwaken(f); continue; }
+        this.changeOutfit(f, true);
+      } else this.changeOutfit(f, false);
+    }
+  }
+  changeOutfit(f, on) {
+    f.outfit2 = on; f.setAwake(on);
+    if (on) {
+      this.fx.ring(f.x, f.y - 60, '#fff3c4', 55); this.fx.spark(f.x, f.y - 60, 60, '#fff3c4');
+      f.hitFlash = Math.max(f.hitFlash, 8);
+      SFX.play('change');
+    }
+  }
+  // 覚醒の演出：時間が止まり、カメラが寄って、サングラスを外す（「これからよ」と言っている間）
+  startAwaken(f) {
+    this.awaken = { f, t: 0, from: copyPose(f.disp) };
+    this.cine = null; // 強烈な一撃の演出より、こちらを優先
+    f.wireOn = false; f.wireK = 0;
+    this.flash = Math.max(this.flash, 3);
+    SFX.play('cine');
+  }
+  stepAwaken() {
+    const a = this.awaken, f = a.f, T = ++a.t, END = 78;
+    this.prevCam = { ...this.cam };
+    f.px = f.x; f.py = f.y; f.prevTip = f.tip;
+    copyPose(f.disp, f.prevDisp);
+    for (const g of this.f) if (g !== f) { g.px = g.x; g.py = g.y; copyPose(g.disp, g.prevDisp); }
+    // カメラ：彼女の上半身に寄る → 最後に戻る
+    const sc = f.look.scale || 1;
+    if (T < END - 10) {
+      this.cam.x = lerp(this.cam.x, f.x, 0.14);
+      this.cam.y = lerp(this.cam.y, f.y - 80 * sc, 0.14);
+      this.cam.z = lerp(this.cam.z, clamp((view.h || 390) / 115, 1.8, 3.6), 0.12);
+    }
+    // しぐさ：顔に手 → サングラスを外して払う → 決めポーズ
+    const keys = [[0, a.from], [10, POSES.shadeGrab], [24, POSES.shadeGrab], [32, POSES.shadeOff], [46, POSES.poseCool], [END - 8, POSES.poseCool], [END, POSES.idle]];
+    let tgt = keys[keys.length - 1][1];
+    for (let i = 0; i < keys.length - 1; i++) if (T >= keys[i][0] && T < keys[i + 1][0]) { tgt = lerpPose(keys[i][1], keys[i + 1][1], ease((T - keys[i][0]) / (keys[i + 1][0] - keys[i][0]))); break; }
+    tgt = copyPose(tgt);
+    tgt.yw = (T < END - 8 ? -55 : 0) * f.facing; tgt.r = 0; tgt.pa = 0;
+    for (const k of PK) f.disp[k] = lerp(f.disp[k], tgt[k], 0.3);
+    if (T === 28) { this.changeOutfit(f, true); this.flash = Math.max(this.flash, 2); }
+    if (f.hitFlash > 0) f.hitFlash--;
+    this.fx.update();
+    if (T >= END) this.awaken = null;
+  }
   pushApart() {
     const [a, b] = this.f;
     if (!a.alive || !b.alive || !a.grounded || !b.grounded || a.grabbed || b.grabbed || a.grabbedBy || b.grabbedBy) return;
@@ -1465,9 +1634,15 @@ class Battle {
     }
   }
   spawnProjectile(owner, ev) {
-    const base = owner.c.projectiles && owner.c.projectiles[ev.proj];
+    const base = (owner.projs || owner.c.projectiles || {})[ev.proj];
     if (!base) return;
-    if (base.max && this.projectiles.filter(p => p.owner === owner && p.type === base.type).length >= base.max) return;
+    if (base.max) {
+      const mine = this.projectiles.filter(p => p.maker === owner && p.type === base.type);
+      if (mine.length >= base.max) {
+        if (!base.replace) return;
+        mine[0].dead = true; this.fx.smoke(mine[0].x, mine[0].y - 6); // 古い地雷は消える
+      }
+    }
     const cm = owner.chargeMul || 1;
     let dmg = (ev.dmg !== undefined ? ev.dmg : base.dmg) * (owner.s.dmgMul || 1) * cm;
     let speed = (ev.speed !== undefined ? ev.speed : base.speed) * (1 + (cm - 1) * 0.35);
@@ -1480,11 +1655,21 @@ class Battle {
       const L = k => lerp(hs.min[k], hs.max2[k], power);
       dmg = L('dmg') * (owner.s.dmgMul || 1); speed = L('speed'); bkb = L('bkb'); kbg = L('kbg');
     }
-    const o = { owner, type: base.type, r: base.r, dmg, life: base.life,
+    const o = { owner, maker: owner, type: base.type, r: base.r, dmg, life: base.life,
       kang: ev.kang !== undefined ? ev.kang : base.ang, bkb, kbg, grav: base.grav || 0, decel: base.decel || 0,
-      noHit: !!ev.noHit, power, big: power >= 1 };
+      noHit: !!ev.noHit, power, big: power >= 1,
+      fkb: base.fkb, react: base.react, rehit: base.rehit || 0, arm: base.arm || 0, cloudR: base.cloudR,
+      cloudLife: base.cloudLife || 120, boom: base.boom || 90, pierce: !!base.pierce };
     if (hs) o.grav = (base.grav || 0) * (1 - power * 0.8);
     if (base.type === 'arrow') SFX.play('shoot', power);
+    if (base.type === 'bullet') SFX.play('gun', power);
+    if (base.type === 'wave') SFX.play('slash');
+    if (base.type === 'mine') {
+      // 地雷：足元の前に置く（空中なら真下に落ちる）
+      Object.assign(o, { x: owner.x + (ev.x || 0) * owner.facing, y: owner.grounded ? 0 : owner.y, vx: 0, vy: 0, onGround: owner.grounded });
+      this.projectiles.push(new Projectile(o));
+      return;
+    }
     if (base.type === 'shock') {
       if (!owner.grounded && owner.y < -2) return;
       const d = (ev.dir || 1) * owner.facing;
@@ -1519,8 +1704,10 @@ class Battle {
       if (p.dead || p.noHit) continue;
       for (const d of this.f) {
         if (d === p.owner || !d.alive) continue;
+        if (p.type === 'mine' && !p.armed) continue;
+        if (p.type === 'smoke' && !p.cloud) continue;
         const rw = d.activeWindow('reflect');
-        if (rw && p.type !== 'shock') {
+        if (rw && (p.type === 'arrow' || p.type === 'bullet' || p.type === 'wave' || p.type === 'disc')) {
           const rx = d.x + rw.x * d.facing, ry = d.y - rw.y;
           if (Math.hypot(p.x - rx, p.y - ry) < rw.r + p.r) {
             p.owner = d; p.dmg *= rw.mul; p.hitRec.clear();
@@ -1531,16 +1718,28 @@ class Battle {
             continue;
           }
         }
-        if (!d.hittable() || p.hitRec.has(d)) continue;
-        if (capsuleHit(d, p.x, p.y, p.r)) {
-          p.hitRec.add(d);
-          hits.push({ a: p.owner, d, hb: { dmg: p.dmg, ang: p.kang, bkb: p.bkb, kbg: p.kbg }, wx: p.x, wy: p.y, proj: p });
-          if (p.type === 'arrow') p.dead = true;
+        if (!d.hittable()) continue;
+        if (p.hitRec.has(d) && !(p.rehit && p.age - p.hitRec.get(d) >= p.rehit)) continue;
+        const py = p.type === 'mine' ? p.y - 12 : p.type === 'smoke' ? p.y - 30 : p.y;
+        if (capsuleHit(d, p.x, py, p.r)) {
+          p.hitRec.set(d, p.age);
+          hits.push({ a: p.owner, d, hb: { dmg: p.dmg, ang: p.kang, bkb: p.bkb, kbg: p.kbg, fkb: p.fkb, react: p.react }, wx: p.x, wy: py, proj: p });
+          if ((p.type === 'arrow' || p.type === 'bullet') && !(p.pierce && p.big)) p.dead = true;
+          if (p.type === 'mine') {
+            // 地雷の爆発
+            p.dead = true;
+            this.fx.ring(p.x, p.y - 20, '#ffb13b', p.boom); this.fx.spark(p.x, p.y - 20, p.boom * 1.8, '#ffd34d');
+            for (const s of [-1, 1]) this.fx.dust(p.x + s * 30, 0, 1.6);
+            this.shake = Math.max(this.shake, 9); SFX.play('boom');
+          }
         }
       }
     }
     for (const h of hits) {
-      if (h.proj) { this.applyHit(h.a, h.d, h.hb, sign(h.proj.vx || 1), h.wx, h.wy, true, h.proj); continue; }
+      if (h.proj) {
+        const pv = h.proj.vx || (h.d.x - h.proj.x) || 1; // 地雷や煙は、相手を外側へ飛ばす
+        this.applyHit(h.a, h.d, h.hb, sign(pv), h.wx, h.wy, true, h.proj); continue;
+      }
       if (!h.a.alive || !h.d.alive) continue;
       h.a.hitRec.set(h.d, h.a.activeF);
       if (h.hb.grab) { if (h.a.state === 'move') this.startGrab(h.a, h.d); continue; }
@@ -1603,7 +1802,7 @@ class Battle {
       d.kbx = dir * Math.min(8, 1.5 + dmg * 0.25);
       this.fx.ring(wx, wy, 'rgba(255,255,255,0.8)', 26);
       SFX.play('shield');
-      if (proj) proj.dead = true;
+      if (proj && proj.type !== 'smoke') proj.dead = true;
       return;
     }
     // アーマー（ダメージは受けるが、ひるまない）
@@ -1627,6 +1826,7 @@ class Battle {
       d.kbx = -sign(d.x - a.x) * v; d.kby = d.grounded ? 0 : -2; d.vx = d.vy = 0;
       d.state = 'hitstun'; d.hurtKind = 'hurt'; d.timer = 26; d.hitFlash = 4;
       d.hitlag = a.hitlag = 5;
+      a.pullTarget = d;
       this.fx.spark(wx, wy, 20, '#ffe9a8');
       return;
     }
@@ -1668,7 +1868,8 @@ class Battle {
       d.timer = Math.max(hb.react === 'light' ? 8 : 10, Math.floor(kb * PH.hitstunMul));
       d.hurtKind = hb.react === 'light' ? 'hurtLight' : (ang > 60 && ang < 120 ? 'hurtHigh' : 'hurt');
     }
-    this.fx.spark(wx, wy, kb, kb > 150 ? '#ffd34d' : '#ffffff');
+    this.fx.spark(wx, wy, kb, hb.elec ? '#7fe3ff' : kb > 150 ? '#ffd34d' : '#ffffff');
+    if (hb.elec) { this.fx.ring(wx, wy, '#7fe3ff', 46); SFX.play('zap'); }
     if (kb > 110) this.shake = Math.max(this.shake, Math.min(14, (kb - 100) * 0.07));
     if (kb > 170) this.flash = Math.max(this.flash, 3);
     SFX.play(kb < 60 ? 'hitL' : kb < 130 ? 'hitM' : 'hitH');
@@ -1727,13 +1928,17 @@ class Battle {
       minX = Math.min(...alive.map(f => f.x)); maxX = Math.max(...alive.map(f => f.x));
       minY = Math.min(...alive.map(f => f.y - 90)); maxY = Math.max(...alive.map(f => f.y));
     }
+    // 近いときは寄って、離れたら引く（数値は data.js の camera）
+    const C = D.camera || { minWidth: 600, padX: 360, minHeight: 300, padY: 260, centerPull: 0.12, zoomIn: 0.04, zoomOut: 0.1 };
     let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    cx = lerp(cx, 0, 0.25); cy = lerp(cy, -120, 0.3);
+    const spread = maxX - minX;
+    cx = lerp(cx, 0, C.centerPull + clamp(spread / 2000, 0, 0.2)); cy = lerp(cy, -90, 0.25);
     const vw = view.w || 800, vh = view.h || 400;
-    const needW = Math.max(maxX - minX + 480, 1120), needH = Math.max(maxY - minY + 400, 540);
+    const needW = Math.max(spread + C.padX, C.minWidth), needH = Math.max(maxY - minY + C.padY, C.minHeight);
     const z = clamp(Math.min(vw / needW, vh / needH), 0.22, 3);
     if (!this.camInit) { this.cam = { x: cx, y: cy, z }; this.prevCam = { ...this.cam }; this.camInit = true; return; }
-    this.cam.x = lerp(this.cam.x, cx, 0.08); this.cam.y = lerp(this.cam.y, cy, 0.08); this.cam.z = lerp(this.cam.z, z, 0.06);
+    this.cam.x = lerp(this.cam.x, cx, 0.09); this.cam.y = lerp(this.cam.y, cy, 0.08);
+    this.cam.z = lerp(this.cam.z, z, z < this.cam.z ? C.zoomOut : C.zoomIn); // 引くときは早く、寄るときはゆっくり
   }
 }
 
@@ -1987,7 +2192,7 @@ function render(b, alpha) {
   if (b.shake > 0) { sx = (rnd() - 0.5) * b.shake * 2; sy = (rnd() - 0.5) * b.shake * 2; }
   if (use3D) {
     PROJ = window.Render3D.render(b, alpha, cam, sx, sy, view, api);
-    for (const f of b.f) if (f.alive) drawTag(f, PROJ.X(lerp(f.px, f.x, alpha)), PROJ.Y(lerp(f.py, f.y, alpha) - 128));
+    for (const f of b.f) if (f.alive && !(b.awaken && b.awaken.f === f)) drawTag(f, PROJ.X(lerp(f.px, f.x, alpha)), PROJ.Y(lerp(f.py, f.y, alpha) - 128));
   } else {
     if (window.Render3D && window.Render3D.ready) window.Render3D.hide();
     PROJ = make2DProj(cam, sx, sy);
@@ -2001,10 +2206,11 @@ function render(b, alpha) {
     for (const f of b.f) drawFighter(f, alpha, X, Y, z);
   }
   const { X, Y, z } = PROJ;
-  for (const f of b.f) drawTrail(f, X, Y, z);
+  if (!b.awaken) for (const f of b.f) drawTrail(f, X, Y, z);
   drawFX(b.fx, X, Y, z);
   if (DEBUG) drawDebug(b, X, Y, z);
   if (cw > 0) drawCine(b, X, Y, z, cw, tick);
+  if (b.awaken) drawAwaken(b, X, Y, z, tick);
   if (b.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.05})`; ctx.fillRect(0, 0, W, H); }
   drawHUD(b);
   drawControls();
@@ -2046,6 +2252,30 @@ function drawCine(b, X, Y, z, w, tick) {
   }
   // 画面の上下の帯（映画のような雰囲気）
   const bar = H * 0.07 * w;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+}
+// 覚醒の演出：まわりを暗くして、映画のような帯と光の粒
+function drawAwaken(b, X, Y, z, tick) {
+  const a = b.awaken, f = a.f, W = view.w, H = view.h, t = a.t + tick, END = 78;
+  const w = ease(Math.min(clamp(t / 8, 0, 1), clamp((END - t) / 10, 0, 1)));
+  const sc = f.look.scale || 1, x = X(f.x), y = Y(f.y - 75 * sc), R = Math.hypot(W, H);
+  const g = ctx.createRadialGradient(x, y, R * 0.08, x, y, R * 0.5);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(4,0,12,${0.82 * w})`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // サングラスを外した瞬間の光
+  if (t > 27 && t < 44) {
+    const u = (t - 27) / 17;
+    ctx.globalAlpha = (1 - u) * 0.75; ctx.fillStyle = '#fff6dc';
+    ctx.beginPath(); ctx.arc(x, y - 12 * z, (10 + 70 * u) * Math.max(0.6, z * 0.5), 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // ゆっくり上る光の粒
+  ctx.fillStyle = `rgba(255,236,190,${0.75 * w})`;
+  for (let i = 0; i < 18; i++) {
+    const px = x + Math.sin(i * 7.3) * W * 0.32, py = y + H * 0.5 - ((t * (1.5 + (i % 4) * 0.6) + i * 37) % (H * 0.9));
+    ctx.beginPath(); ctx.arc(px, py, 1.5 + (i % 3), 0, Math.PI * 2); ctx.fill();
+  }
+  const bar = H * 0.1 * w;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
 }
 function drawStage(X, Y, z) {
@@ -2150,6 +2380,20 @@ function drawWeapon(f, P, z, alpha, X, Y, col, dark) {
       ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = Math.max(1.5, 2 * z);
       ctx.beginPath(); ctx.moveTo(bh[0], bh[1]); ctx.lineTo(h[0] + dx * 14 * z, h[1] + dy * 14 * z); ctx.stroke();
     }
+  } else if (w === 'katana') {
+    const L = KATANA_LEN * (f.look.scale || 1) * z;
+    ctx.strokeStyle = '#e8eef8'; ctx.lineWidth = Math.max(1.5, 2.6 * z);
+    ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.lineTo(h[0] + dx * L, h[1] + dy * L); ctx.stroke();
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = Math.max(2, 3.5 * z);
+    ctx.beginPath(); ctx.moveTo(h[0] - dx * 6 * z, h[1] - dy * 6 * z); ctx.lineTo(h[0] + dx * 3 * z, h[1] + dy * 3 * z); ctx.stroke();
+  } else if (w === 'gadget') {
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(h[0] + dx * 4 * z, h[1] + dy * 4 * z, 3.5 * z, 0, Math.PI * 2); ctx.fill();
+    if (f.wireOn && f.wireK > 0) {
+      const t = [X(f.tip[0]), Y(f.tip[1])];
+      ctx.strokeStyle = '#cfd6e6'; ctx.lineWidth = Math.max(1, 1.5 * z);
+      ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.lineTo(t[0], t[1]); ctx.stroke();
+      ctx.fillStyle = '#9aa3b8'; ctx.beginPath(); ctx.arc(t[0], t[1], 4 * z, 0, Math.PI * 2); ctx.fill();
+    }
   } else if (w === 'mirror') {
     const c = [h[0] + dx * 4 * z, h[1] + dy * 4 * z], L = 22 * z;
     const active = !!f.activeWindow('reflect') || !!f.activeWindow('counter');
@@ -2191,6 +2435,20 @@ function drawProjectile(p, alpha, X, Y, z) {
   } else if (p.type === 'disc') {
     ctx.fillStyle = '#cfe6ff'; ctx.strokeStyle = col; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(x, y, p.r * z, p.r * 0.55 * z, p.age * 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  } else if (p.type === 'bullet') {
+    ctx.fillStyle = p.big ? '#ffe9a8' : '#fff4d0';
+    ctx.beginPath(); ctx.ellipse(x, y, (p.big ? 10 : 6) * z, (p.big ? 4 : 2.5) * z, Math.atan2(p.vy, p.vx), 0, Math.PI * 2); ctx.fill();
+  } else if (p.type === 'wave') {
+    ctx.strokeStyle = 'rgba(220,240,255,0.85)'; ctx.lineWidth = 4 * z;
+    const d = sign(p.vx);
+    ctx.beginPath(); ctx.arc(x - d * 10 * z, y, p.r * z, -Math.PI / 2.4, Math.PI / 2.4, d < 0); ctx.stroke();
+  } else if (p.type === 'mine') {
+    ctx.fillStyle = '#2b2f3a'; ctx.beginPath(); ctx.ellipse(x, y - 4 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.armed && Math.floor(p.age / 15) % 2 === 0 ? '#ff4040' : '#702020';
+    ctx.beginPath(); ctx.arc(x, y - 8 * z, 2.5 * z, 0, Math.PI * 2); ctx.fill();
+  } else if (p.type === 'smoke') {
+    if (p.cloud) { ctx.fillStyle = 'rgba(170,176,196,0.45)'; ctx.beginPath(); ctx.arc(x, y - 30 * z, p.r * z, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.fillStyle = '#3a3f4c'; ctx.beginPath(); ctx.arc(x, y, 6 * z, 0, Math.PI * 2); ctx.fill(); }
   } else if (p.type === 'shock') {
     const h = (22 + Math.sin(p.age * 0.8) * 5) * z;
     ctx.fillStyle = 'rgba(255,160,60,0.85)';
@@ -2336,17 +2594,30 @@ function show(id) {
   for (const s of ['title', 'select', 'pause', 'result']) $(s).classList.toggle('show', s === id);
 }
 function buildCards() {
-  const mk = (el, key) => {
-    el.innerHTML = '';
-    D.characters.forEach((c, i) => {
-      const d = document.createElement('div');
-      d.className = 'card' + (state[key] === i ? ' on' : '');
-      d.innerHTML = `${c.no}. ${c.name}<small>${c.range}・${c.type}</small>`;
-      d.addEventListener('click', () => { state[key] = i; buildCards(); });
-      el.appendChild(d);
-    });
+  // 1つの画面から選ぶ：上の「あなた」「CPU」で、どちらのキャラを選ぶか切りかえる
+  if (!state.picking) state.picking = 'p1';
+  const pk = (el, key, label) => {
+    const c = D.characters[state[key]];
+    el.className = 'pick ' + key + (state.picking === key ? ' on' : '');
+    el.innerHTML = (c.portrait ? `<img src="${c.portrait}" alt="">` : '') + `<div><b>${label}</b><span>${c.name}</span></div>`;
+    el.onclick = () => { state.picking = key; buildCards(); };
   };
-  mk($('cardsP1'), 'p1'); mk($('cardsCPU'), 'cpu');
+  pk($('pickP1'), 'p1', 'あなた'); pk($('pickCPU'), 'cpu', 'CPU');
+  const el = $('cards');
+  el.innerHTML = '';
+  D.characters.forEach((c, i) => {
+    const d = document.createElement('div');
+    const isP1 = state.p1 === i, isCpu = state.cpu === i;
+    d.className = 'card' + (isP1 ? ' p1' : '') + (isCpu ? ' cpu' : '');
+    const tags = (isP1 ? '<span class="tag p1">あなた</span>' : '') + (isCpu ? '<span class="tag cpu">CPU</span>' : '');
+    d.innerHTML = (c.portrait ? `<img src="${c.portrait}" alt="">` : '') + `<div class="tags">${tags}</div>${c.name}<small>${c.range}・${c.type}</small>`;
+    d.addEventListener('click', () => {
+      state[state.picking] = i;
+      if (state.picking === 'p1') state.picking = 'cpu'; // 自分を選んだら、次はCPUを選ぶ
+      buildCards();
+    });
+    el.appendChild(d);
+  });
   const lv = $('cpuLevel');
   lv.innerHTML = '';
   for (const k in D.cpu.levels) {
@@ -2380,7 +2651,7 @@ function init3D() {
     window.Render3D.init(view);
   } catch (e) { state.mode = '2d'; }
 }
-$('btnStart').addEventListener('click', () => { buildCards(); show('select'); state.screen = 'select'; });
+$('btnStart').addEventListener('click', () => { state.picking = 'p1'; buildCards(); show('select'); state.screen = 'select'; });
 $('btnBack').addEventListener('click', () => { show('title'); state.screen = 'title'; });
 $('btnFight').addEventListener('click', startBattle);
 $('btnResume').addEventListener('click', () => { state.paused = false; show(null); acc = 0; });

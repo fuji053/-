@@ -42,6 +42,8 @@ const CHAINS = [
   { prefix: 'hair_', n: 4, stiff: 0.07, damp: 0.86, grav: 0.35, collide: 'body' },
   { prefix: 'skirtF_', n: 3, stiff: 0.16, damp: 0.8, grav: 0.3, collide: 'legs' },
   { prefix: 'skirtB_', n: 3, stiff: 0.16, damp: 0.8, grav: 0.3, collide: 'legs' },
+  { prefix: 'tail_', n: 4, stiff: 0.12, damp: 0.84, grav: 0.12, collide: 'legs' },   // しっぽ（狐の剣士）
+  { prefix: 'scarf_', n: 4, stiff: 0.06, damp: 0.88, grav: 0.28, collide: 'body' },  // マフラーのたれ（狐の剣士）
 ];
 
 MR.build = function (entry, f, scene) {
@@ -68,10 +70,10 @@ MR.build = function (entry, f, scene) {
   holder.updateMatrixWorld(true);
   const bones = {};
   for (const k in B) bones[k] = root.getObjectByName(B[k]);
-  // 大きさ：モデルの脚の長さを、ゲームの脚の長さ（47）に合わせる
+  // 大きさ：モデルの脚の長さを、ゲームの脚の長さ（47 × キャラの大きさ）に合わせる
   const wp = o => o.getWorldPosition(new V3());
   const legLen = wp(bones.rUp).distanceTo(wp(bones.rLeg)) + wp(bones.rLeg).distanceTo(wp(bones.rFoot));
-  const sc = 47 / legLen;
+  const sc = 47 * ((f.look && f.look.scale) || 1) / legLen;
   inner.scale.setScalar(sc);
   holder.updateMatrixWorld(true);
   // 立ち姿勢（骨の初期状態）を記録

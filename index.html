@@ -45,7 +45,7 @@
   }
   .screen.show { display: flex; }
   .screen.overlay { background: rgba(5, 8, 20, 0.72); }
-  .box { width: min(720px, 100%); max-height: 100%; overflow: auto; text-align: center; }
+  .box { width: min(760px, 100%); max-height: 100%; overflow: auto; text-align: center; }
   h1 { font-size: clamp(30px, 7vh, 52px); margin: 0 0 6px; letter-spacing: 0.06em; }
   h2 { font-size: 22px; margin: 0 0 10px; }
   .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; line-height: 1.6; }
@@ -57,19 +57,33 @@
   .btn:active { transform: scale(0.97); }
   .btn.primary { background: var(--accent); color: #1a1400; border-color: transparent; }
   .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-  .sel-wrap { display: flex; gap: 14px; justify-content: center; }
-  .sel-col { flex: 1; min-width: 0; }
-  .sel-col h3 { margin: 0 0 8px; font-size: 15px; }
-  .sel-col.p1 h3 { color: var(--p1); }
-  .sel-col.cpu h3 { color: var(--cpu); }
-  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* キャラ選択：1つの画面から、あなたとCPUのキャラを選ぶ */
+  .picks { display: flex; gap: 10px; justify-content: center; margin-bottom: 8px; }
+  .pick { display: flex; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px;
+    padding: 4px 12px 4px 4px; background: #151c3b; min-width: 190px; text-align: left; touch-action: manipulation; opacity: 0.65; }
+  .pick img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #d9d9de; pointer-events: none; }
+  .pick b { display: block; font-size: 11px; }
+  .pick span { font-size: 15px; font-weight: 700; }
+  .pick.p1 b { color: var(--p1); } .pick.cpu b { color: var(--cpu); }
+  .pick.on { opacity: 1; }
+  .pick.p1.on { border-color: var(--p1); box-shadow: 0 0 10px rgba(255,93,93,0.45); }
+  .pick.cpu.on { border-color: var(--cpu); box-shadow: 0 0 10px rgba(79,168,255,0.45); }
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 116px)); gap: 10px; justify-content: center; }
   .card {
-    border: 2px solid var(--line); border-radius: 12px; padding: 8px 6px; background: #151c3b;
-    font-size: 15px; font-weight: 700; touch-action: manipulation;
+    border: 2px solid var(--line); border-radius: 12px; padding: 0 0 6px; background: #151c3b; overflow: hidden;
+    font-size: 14px; font-weight: 700; touch-action: manipulation; line-height: 1.25; position: relative;
   }
-  .card small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 3px; }
-  .sel-col.p1 .card.on { border-color: var(--p1); background: #3a1c2a; }
-  .sel-col.cpu .card.on { border-color: var(--cpu); background: #162c4c; }
+  .card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; margin-bottom: 4px; background: #d9d9de; pointer-events: none; }
+  .card small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; margin-top: 1px; }
+  .card.p1 { border-color: var(--p1); }
+  .card.cpu { border-color: var(--cpu); }
+  .card.p1.cpu { border-color: #c9a2ff; }
+  .card .tags { position: absolute; top: 4px; left: 4px; display: flex; gap: 3px; }
+  .card .tag { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 6px; color: #fff; }
+  .card .tag.p1 { background: var(--p1); } .card .tag.cpu { background: var(--cpu); color: #04122a; }
+  #select h2 { margin-bottom: 6px; font-size: 19px; }
+  #select .btn { padding: 9px 22px; margin: 4px 6px; }
+  #select .lv-row { margin-top: 8px; }
   .menu .btn { display: block; width: 260px; margin: 8px auto; }
   .lv-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; font-size: 14px; color: var(--muted); }
   .segs { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -99,10 +113,11 @@
 <div class="screen" id="select">
   <div class="box">
     <h2>キャラを選んでください</h2>
-    <div class="sel-wrap">
-      <div class="sel-col p1"><h3>あなた</h3><div class="cards" id="cardsP1"></div></div>
-      <div class="sel-col cpu"><h3>CPU</h3><div class="cards" id="cardsCPU"></div></div>
+    <div class="picks">
+      <div class="pick p1" id="pickP1"></div>
+      <div class="pick cpu" id="pickCPU"></div>
     </div>
+    <div class="cards" id="cards"></div>
     <div class="lv-row"><span>CPUの強さ</span><div class="segs" id="cpuLevel"></div></div>
     <div class="row" style="margin-top:8px">
       <button class="btn" id="btnBack">もどる</button>

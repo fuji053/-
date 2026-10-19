@@ -131,6 +131,42 @@ function makeRig(f) {
     rig.glow = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
     rig.glow.visible = false; g.add(rig.glow);
     mats.push(bm);
+  } else if (w === 'katana') {
+    // 刀：つか（黒）・つば（金）・刃（銀）。刃は +Y 方向に伸ばして作り、手の向きに合わせて回す
+    const L = 42 * (f.look.scale || 1);
+    rig.katana = new THREE.Group(); g.add(rig.katana);
+    const bladeM = new THREE.MeshStandardMaterial({ color: 0xe9eef6, metalness: 0.6, roughness: 0.25, emissive: 0x000000 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.1, L, 3.2), bladeM); blade.position.y = L / 2 + 1.5; rig.katana.add(blade);
+    const tipM = new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 4), bladeM); tipM.position.y = L + 3.5; tipM.scale.z = 1; rig.katana.add(tipM);
+    const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 1.2, 12), new THREE.MeshStandardMaterial({ color: 0xb08a3c, metalness: 0.7, roughness: 0.35 }));
+    tsuba.position.y = 1; rig.katana.add(tsuba);
+    const tsuka = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 9, 8), new THREE.MeshStandardMaterial({ color: 0x1d1d22, roughness: 0.8 }));
+    tsuka.position.y = -3.5; rig.katana.add(tsuka);
+    rig.bladeMat = bladeM;
+    mats.push(bladeM);
+  } else if (w === 'gadget') {
+    // 小さなピストル（手の向きに合わせる）
+    rig.gun = new THREE.Group(); g.add(rig.gun);
+    const gm = new THREE.MeshStandardMaterial({ color: 0x23252b, metalness: 0.5, roughness: 0.4 });
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(2.6, 13, 3), gm); slide.position.y = 5; rig.gun.add(slide);
+    const sil = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 7, 8), gm); sil.position.y = 14.5; rig.gun.add(sil);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3, 6), gm); grip.position.set(0, 0.5, -2.5); rig.gun.add(grip);
+    // ワイヤー（技の間だけ）
+    const wm = new THREE.MeshStandardMaterial({ color: 0xcfd6e6, metalness: 0.6, roughness: 0.3 });
+    rig.wire = new THREE.Mesh(CYL, wm); rig.wire.userData.r = 0.7; rig.wire.visible = false; scene.add(rig.wire);
+    rig.hook = new THREE.Mesh(new THREE.ConeGeometry(3, 7, 6), wm); rig.hook.visible = false; scene.add(rig.hook);
+    // 反射ガジェットの光の盾
+    rig.field = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 6), new THREE.MeshBasicMaterial({ color: 0x7fe3ff, transparent: true, opacity: 0.22, depthWrite: false }));
+    rig.field.rotation.x = Math.PI / 2; rig.field.visible = false; scene.add(rig.field);
+    // 覚醒の演出で手に持つサングラス
+    if (f.c.awaken) {
+      rig.shades = new THREE.Group();
+      const sm = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, metalness: 0.6, roughness: 0.15 });
+      for (const sx of [-3.2, 3.2]) { const l = new THREE.Mesh(SPH, sm); l.scale.set(2.8, 1.7, 0.6); l.position.x = sx; rig.shades.add(l); }
+      const br = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.5), sm); rig.shades.add(br);
+      rig.shades.visible = false; g.add(rig.shades);
+    }
+    mats.push(gm);
   } else if (w === 'mirror') {
     rig.shieldMat = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.15, metalness: 0.85, emissive: 0x000000 });
     rig.mirror = new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 5, 28), rig.shieldMat); g.add(rig.mirror);
@@ -138,9 +174,10 @@ function makeRig(f) {
     rig.mirror.add(rimM); rimM.rotation.x = Math.PI / 2;
     mats.push(rig.shieldMat);
   }
-  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror].filter(Boolean));
+  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades].filter(Boolean));
   // 3Dモデルがあるキャラは読み込みを始める（読み込めるまでは仮の体で表示）
   if (f.c.model && window.ModelRig) rig.modelEntry = window.ModelRig.load(f.c.model);
+  if (f.c.model2 && window.ModelRig) rig.modelEntry2 = window.ModelRig.load(f.c.model2); // ％が高くなったときの姿
   // シールド
   rig.bubble = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: f.slot === 0 ? 0xff5d5d : 0x4fa8ff, transparent: true, opacity: 0.28, depthWrite: false }));
   scene.add(rig.bubble);
@@ -164,7 +201,8 @@ function updateRig(rig, f, alpha, G) {
   g.visible = f.alive;
   rig.shadow.visible = false; rig.bubble.visible = false;
   if (rig.whip) for (const s of rig.whip) s.visible = f.alive;
-  if (!f.alive) return;
+  if (rig.wire) { rig.wire.visible = rig.hook.visible = false; rig.field.visible = false; }
+  if (!f.alive) { if (rig.mr) rig.mr.holder.visible = false; return; }
   const pose = G.interpPose(f, alpha);
   const pts = G.solvePose(pose, f.look, f.grounded, f.state === 'down');
   let x = G.lerp(f.px, f.x, alpha), y = G.lerp(f.py, f.y, alpha);
@@ -209,7 +247,10 @@ function updateRig(rig, f, alpha, G) {
   const blink = f.invuln > 0 && f.state !== 'move' && Math.floor(f.invuln / 4) % 2 === 0;
   for (const m of rig.mats) { m.transparent = blink; m.opacity = blink ? 0.45 : 1; }
   // 3Dモデル（読み込めていれば、仮の体のかわりに表示）
-  if (rig.modelEntry && rig.modelEntry.ready && !rig.mr) rig.mr = window.ModelRig.build(rig.modelEntry, f, scene);
+  // 姿の切りかえ（エージェントは％が高いと別のモデル）
+  const wantEntry = f.outfit2 && rig.modelEntry2 && rig.modelEntry2.ready ? rig.modelEntry2 : rig.modelEntry;
+  if (rig.mr && rig.mrEntry !== wantEntry && wantEntry && wantEntry.ready) { window.ModelRig.remove(rig.mr, scene); rig.mr = null; }
+  if (wantEntry && wantEntry.ready && !rig.mr) { rig.mr = window.ModelRig.build(wantEntry, f, scene); rig.mrEntry = wantEntry; }
   let fH3, fE3, bH3;
   if (rig.mr) {
     look.glow = f.charging && f.move && f.move.holdShot && f.shotT >= 1 ? 0.35 + 0.25 * Math.sin(f.anim * 0.18) : 0;
@@ -242,6 +283,27 @@ function updateRig(rig, f, alpha, G) {
     rig.glow.visible = st >= 1;
     if (rig.glow.visible) { rig.glow.position.set(fH3.x + ux * 12, fH3.y + uy * 12, fH3.z); rig.glow.scale.setScalar(13 + Math.sin(performance.now() / 120) * 2); }
   }
+  if (rig.katana) {
+    // 刀は手の向き（前腕の向き）に伸びる。wr で手首を回せる
+    const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
+    rig.katana.position.set(fH3.x, fH3.y, fH3.z + 1);
+    rig.katana.rotation.set(0, 0, ang - Math.PI / 2);
+    const act = f.state === 'move' && f.activeF >= 0 && f.move.hits && f.activeHits().length > 0;
+    rig.bladeMat.emissive.setHex(act ? 0x406080 : (f.activeWindow('counter') ? 0x5090c0 : 0x000000));
+  }
+  if (rig.gun) {
+    const ang = Math.atan2(uy, ux);
+    rig.gun.position.set(fH3.x, fH3.y, fH3.z + 1.5);
+    rig.gun.rotation.set(0, 0, ang - Math.PI / 2);
+    // 覚醒の演出中：外したサングラスを手に持つ（その間ピストルはしまう）
+    const aw = G.state.battle && G.state.battle.awaken;
+    const showShades = !!(rig.shades && aw && aw.f === f && aw.t >= 28);
+    rig.gun.visible = !(aw && aw.f === f);
+    if (rig.shades) {
+      rig.shades.visible = showShades;
+      if (showShades) { rig.shades.position.set(fH3.x + ux * 4, fH3.y + uy * 4, fH3.z + 3); rig.shades.rotation.set(0, 0, ang); }
+    }
+  }
   if (rig.mirror) {
     rig.mirror.position.set(fH3.x + ux * 5, fH3.y + uy * 5, fH3.z + 2);
     rig.mirror.quaternion.setFromUnitVectors(UP, tmpA.set(ux, uy, 0));
@@ -259,6 +321,24 @@ function updateRig(rig, f, alpha, G) {
       const t = i / n, it = 1 - t;
       const p = new THREE.Vector3(it * it * hand.x + 2 * it * t * ctrl.x + t * t * tip.x, it * it * hand.y + 2 * it * t * ctrl.y + t * t * tip.y, hand.z);
       setSeg(rig.whip[i - 1], prev, p); prev = p;
+    }
+  }
+  // ワイヤー（手 → フック）
+  if (rig.wire && f.wireOn && f.wireK > 0.02) {
+    const hand = fH3.clone().applyMatrix4(g.matrixWorld);
+    const tip = new THREE.Vector3(f.tip[0], -f.tip[1], hand.z);
+    setSeg(rig.wire, hand, tip); rig.wire.visible = true;
+    rig.hook.position.copy(tip); rig.hook.visible = true;
+    rig.hook.quaternion.setFromUnitVectors(UP, tmpA.subVectors(tip, hand).normalize());
+  }
+  // 反射ガジェット（光の六角形）
+  if (rig.field) {
+    const rw = f.activeWindow('reflect');
+    if (rw) {
+      rig.field.visible = true;
+      rig.field.position.set(x + rw.x * f.facing, -(y - rw.y), 10);
+      const s = rw.r * (0.92 + Math.sin(performance.now() / 60) * 0.06);
+      rig.field.scale.set(s, 2, s);
     }
   }
   // シールド
@@ -295,6 +375,34 @@ function projMesh(p) {
     }
   } else if (p.type === 'disc') {
     m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, 4, 24), new THREE.MeshStandardMaterial({ color: 0xcfe6ff, metalness: 0.85, roughness: 0.15 }));
+  } else if (p.type === 'bullet') {
+    m = new THREE.Group();
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, p.big ? 16 : 9, 8), new THREE.MeshBasicMaterial({ color: p.big ? 0xffe28a : 0xfff4d0 }));
+    b.rotation.z = Math.PI / 2; m.add(b);
+    const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: p.big ? 0.45 : 0.25, depthWrite: false }));
+    gl.scale.set(p.big ? 16 : 9, p.big ? 6 : 3.5, p.big ? 6 : 3.5); m.add(gl);
+  } else if (p.type === 'wave') {
+    // 三日月の斬撃
+    m = new THREE.Mesh(new THREE.TorusGeometry(p.r, 3, 6, 18, Math.PI * 0.85), new THREE.MeshBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.8, depthWrite: false }));
+    m.userData.arc = Math.PI * 0.85;
+  } else if (p.type === 'mine') {
+    m = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(11, 13, 6, 16), new THREE.MeshStandardMaterial({ color: 0x2b2f3a, metalness: 0.5, roughness: 0.5 }));
+    body.position.y = 3; m.add(body);
+    m.userData.lamp = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0x702020 }));
+    m.userData.lamp.scale.setScalar(2.6); m.userData.lamp.position.y = 7; m.add(m.userData.lamp);
+  } else if (p.type === 'smoke') {
+    m = new THREE.Group();
+    m.userData.bomb = new THREE.Mesh(SPH, new THREE.MeshStandardMaterial({ color: 0x3a3f4c, roughness: 0.6 }));
+    m.userData.bomb.scale.setScalar(5); m.add(m.userData.bomb);
+    m.userData.puffs = [];
+    const pm = new THREE.MeshLambertMaterial({ color: 0xaab0c4, transparent: true, opacity: 0.45, depthWrite: false });
+    for (let i = 0; i < 7; i++) {
+      const s = new THREE.Mesh(SPH, pm); s.visible = false;
+      s.userData.o = [Math.cos(i * 0.9) * 0.55, Math.sin(i * 1.7) * 0.35, Math.sin(i * 2.3) * 0.4, 0.45 + (i % 3) * 0.12];
+      m.add(s); m.userData.puffs.push(s);
+    }
+    m.userData.pm = pm;
   } else {
     m = new THREE.Mesh(new THREE.ConeGeometry(14, 30, 10), new THREE.MeshStandardMaterial({ color: 0xffa03c, emissive: 0x552200 }));
   }
@@ -322,15 +430,34 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     seen.add(f);
     updateRig(rig, f, alpha, G);
   }
-  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow); if (rig.mr) window.ModelRig.remove(rig.mr, scene); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); rigs.delete(f); }
+  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow); if (rig.mr) window.ModelRig.remove(rig.mr, scene); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); if (rig.wire) scene.remove(rig.wire, rig.hook, rig.field); rigs.delete(f); }
   // 飛び道具
   const live = new Set(b.projectiles);
   for (const p of b.projectiles) {
     const m = projMesh(p);
     const px = G.lerp(p.px, p.x, alpha), py = G.lerp(p.py, p.y, alpha);
     m.position.set(px, -py, 0);
-    if (p.type === 'arrow') m.rotation.set(0, 0, Math.atan2(-p.vy, p.vx));
+    if (p.type === 'arrow' || p.type === 'bullet') m.rotation.set(0, 0, Math.atan2(-p.vy, p.vx));
     else if (p.type === 'disc') m.rotation.set(Math.PI / 2 - 0.4, 0, p.age * 0.4);
+    else if (p.type === 'wave') {
+      const d = p.vx < 0 ? Math.PI : 0;
+      m.rotation.set(0, 0, d - m.userData.arc / 2);
+      m.position.x -= (p.vx < 0 ? -1 : 1) * p.r * 0.6;
+      m.material.opacity = Math.min(0.85, p.life / 10);
+    } else if (p.type === 'mine') {
+      m.userData.lamp.material.color.setHex(p.armed && Math.floor(p.age / 15) % 2 === 0 ? 0xff3030 : 0x702020);
+    } else if (p.type === 'smoke') {
+      m.userData.bomb.visible = !p.cloud;
+      if (p.cloud) {
+        m.position.y += 30;
+        for (const s of m.userData.puffs) {
+          const o = s.userData.o; s.visible = true;
+          s.position.set(o[0] * p.r + Math.sin(p.age * 0.03 + o[1] * 9) * 4, o[1] * p.r, o[2] * p.r);
+          s.scale.setScalar(p.r * o[3] * Math.min(1, 0.4 + (120 - p.life) / 15));
+        }
+        m.userData.pm.opacity = 0.45 * Math.min(1, p.life / 25);
+      }
+    }
     else { m.position.y = 15; m.scale.y = 0.8 + Math.sin(p.age * 0.8) * 0.2; }
   }
   for (const [p, m] of projMeshes) if (!live.has(p)) { scene.remove(m); projMeshes.delete(p); }
