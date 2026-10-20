@@ -68,7 +68,9 @@
   .pick.on { opacity: 1; }
   .pick.p1.on { border-color: var(--p1); box-shadow: 0 0 10px rgba(255,93,93,0.45); }
   .pick.cpu.on { border-color: var(--cpu); box-shadow: 0 0 10px rgba(79,168,255,0.45); }
-  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 116px)); gap: 10px; justify-content: center; }
+  .cards { display: flex; gap: 10px; justify-content: safe center; overflow-x: auto; max-width: 100%; padding: 2px 4px 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .cards::-webkit-scrollbar { display: none; }
+  .cards .card { flex: 0 0 auto; width: min(108px, calc((100vw - 90px) / 5)); }
   .card {
     border: 2px solid var(--line); border-radius: 12px; padding: 0 0 6px; background: #151c3b; overflow: hidden;
     font-size: 14px; font-weight: 700; touch-action: manipulation; line-height: 1.25; position: relative;
@@ -177,6 +179,7 @@
 <script src="GLTFLoader.js"></script>
 <script src="SkeletonUtils.js"></script>
 <script src="modelrig.js"></script>
+<script src="catrig.js"></script>
 <script src="stages3d.js"></script>
 <script src="render3d.js"></script>
 <script src="game.js"></script>

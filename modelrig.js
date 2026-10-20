@@ -49,6 +49,7 @@ const CHAINS = [
 ];
 
 MR.build = function (entry, f, scene) {
+  if (f.look && f.look.quad && window.QuadRig) return window.QuadRig.build(entry, f, scene); // 4本足（猫）
   const src = entry.gltf.scene;
   const root = THREE.SkeletonUtils ? THREE.SkeletonUtils.clone(src) : src.clone(true);
   const mats = [];
@@ -221,6 +222,7 @@ function gaze(mr, f, pts, x, y) {
 }
 
 MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
+  if (mr.quad) return window.QuadRig.update(mr, f, pts, x, y, yaw, look, blink);
   const { holder, bones, rest, restDir } = mr;
   holder.visible = f.alive;
   if (!f.alive) return;
@@ -375,6 +377,7 @@ function pushOut(p, a, b, r) {
 
 // 弓などを持たせるための、手の位置（holder基準＝ゲームの骨組みと同じ座標）
 MR.handInfo = function (mr) {
+  if (mr.quad) return window.QuadRig.handInfo(mr);
   const inv = tm1.copy(mr.holder.matrixWorld).invert();
   const g = k => mr.bones[k].getWorldPosition(new V3()).applyMatrix4(inv);
   return { fH: g('rHand'), fE: g('rFore'), bH: g('lHand'), bE: g('lFore') };

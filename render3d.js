@@ -82,6 +82,14 @@ function makeRig(f) {
     rig.arrow = new THREE.Mesh(CYL, rig.arrowMat); rig.arrow.userData.r = 0.9; g.add(rig.arrow);
     rig.glow = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
     rig.glow.visible = false; g.add(rig.glow);
+    // 旋矢（横B）：後ろの手でバトンのように回す矢と、回転の残像
+    rig.twirl = new THREE.Group(); rig.twirl.visible = false; g.add(rig.twirl);
+    const tw = new THREE.Group(); rig.twirl.add(tw); rig.twirlSpin = tw;
+    const tshaft = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 40, 8), new THREE.MeshStandardMaterial({ color: 0xf3e3c0 })); tw.add(tshaft);
+    const thead = new THREE.Mesh(new THREE.ConeGeometry(2.6, 8, 8), new THREE.MeshStandardMaterial({ color: new THREE.Color(f.color), metalness: 0.5, roughness: 0.3 })); thead.position.y = 23; tw.add(thead);
+    const tfl = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7, 0.6), new THREE.MeshStandardMaterial({ color: 0xffffff })); tfl.position.y = -18; tw.add(tfl);
+    rig.twirlBlur = new THREE.Mesh(new THREE.CircleGeometry(23, 28), new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }));
+    rig.twirl.add(rig.twirlBlur);
     mats.push(bm);
   } else if (w === 'katana') {
     // 刀：つか（黒）・つば（金）・刃（銀）。刃は +Y 方向に伸ばして作り、手の向きに合わせて回す
@@ -126,10 +134,11 @@ function makeRig(f) {
     rig.mirror.add(rimM); rimM.rotation.x = Math.PI / 2;
     mats.push(rig.shieldMat);
   }
-  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades].filter(Boolean));
+  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades, rig.twirl].filter(Boolean));
   // 3Dモデルがあるキャラは読み込みを始める（読み込めるまでは仮の体で表示）
   if (f.c.model && window.ModelRig) rig.modelEntry = window.ModelRig.load(f.c.model);
-  if (f.c.model2 && window.ModelRig) rig.modelEntry2 = window.ModelRig.load(f.c.model2); // ％が高くなったときの姿
+  const m2 = f.c.model2 || (f.c.form2 && f.c.form2.model); // ％が高くなったとき／下Bで切りかえたときの姿
+  if (m2 && window.ModelRig) rig.modelEntry2 = window.ModelRig.load(m2);
   // シールド
   rig.bubble = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: f.slot === 0 ? 0xff5d5d : 0x4fa8ff, transparent: true, opacity: 0.28, depthWrite: false }));
   scene.add(rig.bubble);
@@ -154,7 +163,7 @@ function updateRig(rig, f, alpha, G) {
   rig.shadow.visible = false; rig.bubble.visible = false;
   if (rig.whip) for (const s of rig.whip) s.visible = f.alive;
   if (rig.wire) { rig.wire.visible = rig.hook.visible = false; rig.field.visible = false; }
-  if (!f.alive) { if (rig.mr) rig.mr.holder.visible = false; return; }
+  if (!f.alive || f.hidden) { g.visible = false; if (rig.mr) rig.mr.holder.visible = false; return; } // 瞬歩で消えている間も見えない
   const pose = G.interpPose(f, alpha);
   const pts = G.solvePose(pose, f.look, f.grounded, f.state === 'down');
   let x = G.lerp(f.px, f.x, alpha), y = G.lerp(f.py, f.y, alpha);
@@ -201,7 +210,7 @@ function updateRig(rig, f, alpha, G) {
   for (const m of rig.mats) { m.transparent = blink; m.opacity = blink ? 0.45 : 1; }
   // 3Dモデル（読み込めていれば、仮の体のかわりに表示）
   // 姿の切りかえ（エージェントは％が高いと別のモデル）
-  const wantEntry = f.outfit2 && rig.modelEntry2 && rig.modelEntry2.ready ? rig.modelEntry2 : rig.modelEntry;
+  const wantEntry = (f.outfit2 || f.form2) && rig.modelEntry2 && rig.modelEntry2.ready ? rig.modelEntry2 : rig.modelEntry;
   if (rig.mr && rig.mrEntry !== wantEntry && wantEntry && wantEntry.ready) { window.ModelRig.remove(rig.mr, scene); rig.mr = null; }
   if (wantEntry && wantEntry.ready && !rig.mr) { rig.mr = window.ModelRig.build(wantEntry, f, scene); rig.mrEntry = wantEntry; }
   let fH3, fE3, bH3;
@@ -234,6 +243,19 @@ function updateRig(rig, f, alpha, G) {
     const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : 0;
     rig.arrowMat.emissive.setRGB(st * 0.9, st * 0.75, st * 0.3);
     rig.glow.visible = st >= 1;
+    const twm = f.state === 'move' && f.move && f.move.twirl;
+    const twOn = !!(twm && f.mf >= twm[0] && f.mf <= twm[1]);
+    rig.twirl.visible = twOn;
+    if (twOn) {
+      const sc = rig.mr ? 0.75 : 1, fast = f.activeHits().length > 0;
+      rig.twirl.position.set(bH3.x, bH3.y, bH3.z + 2); rig.twirl.scale.setScalar(sc);
+      const thrust = f.mf >= 30; // 最後は回すのをやめて、矢の先で突く
+      if (thrust) rig.twirlSpin.rotation.z = Math.atan2(bH3.y - fH3.y, bH3.x - fH3.x) - Math.PI / 2;
+      else rig.twirlSpin.rotation.z = -performance.now() / (fast ? 22 : 45);
+      rig.twirlBlur.visible = !thrust;
+      rig.twirlBlur.material.opacity = fast ? 0.28 : 0.12;
+      rig.arrow.visible = false;
+    }
     if (rig.glow.visible) { rig.glow.position.set(fH3.x + ux * 12, fH3.y + uy * 12, fH3.z); rig.glow.scale.setScalar(13 + Math.sin(performance.now() / 120) * 2); }
   }
   if (rig.katana) {
@@ -302,8 +324,9 @@ function updateRig(rig, f, alpha, G) {
   // シールド
   if (f.state === 'shield' || f.state === 'shieldstun') {
     rig.bubble.visible = true;
-    rig.bubble.position.set(x, -(y - 45), 0);
-    rig.bubble.scale.setScalar(20 + 34 * (f.shieldHP / G.PH.shieldMax));
+    const bq = f.look.quad ? 0.62 : 1; // 4本足（小さい猫）はシールドも小さく低い
+    rig.bubble.position.set(x, -(y - 45 * bq), 0);
+    rig.bubble.scale.setScalar((20 + 34 * (f.shieldHP / G.PH.shieldMax)) * bq);
   }
   // 影（真下にある床：すり抜け床かステージ）
   let gy = null;
@@ -334,6 +357,40 @@ function projMesh(p) {
     if (p.big) {
       const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
       gl.scale.set(22, 9, 9); gl.position.x = -6; m.add(gl);
+    }
+  } else if (p.type === 'drill') {
+    // 螺旋矢：太い矢＋回る羽根＋まわりの風の渦
+    m = new THREE.Group();
+    const spin = new THREE.Group(); m.add(spin); m.userData.spin = spin;
+    const gold = new THREE.MeshStandardMaterial({ color: 0xf3e3c0, emissive: 0x6a4a10, metalness: 0.3, roughness: 0.4 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 34, 8), gold); shaft.rotation.z = Math.PI / 2; shaft.position.x = -16; spin.add(shaft);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(6, 16, 6), new THREE.MeshStandardMaterial({ color: col, emissive: 0x402000, metalness: 0.6, roughness: 0.3 }));
+    head.rotation.z = -Math.PI / 2; head.position.x = 6; spin.add(head);
+    for (let i = 0; i < 3; i++) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 5), gold);
+      const a = i * Math.PI * 2 / 3; fin.position.set(-30, Math.cos(a) * 3, Math.sin(a) * 3); fin.rotation.x = a; spin.add(fin);
+    }
+    const wm = new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
+    m.userData.winds = [];
+    for (let i = 0; i < 3; i++) {
+      const w = new THREE.Mesh(new THREE.TorusGeometry(10 + i * 4, 1.1, 4, 16, Math.PI * 1.3), wm);
+      w.rotation.y = Math.PI / 2; w.position.x = -4 - i * 11; spin.add(w); m.userData.winds.push(w);
+    }
+  } else if (p.type === 'shard') {
+    // 氷のつぶて：とがった氷の結晶
+    m = new THREE.Group();
+    const im = new THREE.MeshStandardMaterial({ color: 0xc8f4ff, emissive: 0x3a7a99, transparent: true, opacity: 0.85, metalness: 0.2, roughness: 0.1 });
+    const c1 = new THREE.Mesh(new THREE.OctahedronGeometry(p.r * 0.9, 0), im); c1.scale.set(1.8, 0.7, 0.7); m.add(c1);
+    const c2 = new THREE.Mesh(new THREE.OctahedronGeometry(p.r * 0.5, 0), im); c2.position.x = -p.r * 0.9; c2.rotation.x = 0.8; m.add(c2);
+    const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.3, depthWrite: false })); gl.scale.setScalar(p.r * 1.6); m.add(gl);
+  } else if (p.type === 'fireball') {
+    // 火の玉：明るい芯＋ゆらめく炎
+    m = new THREE.Group();
+    const core = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xfff0b0 })); core.scale.setScalar(p.r * 0.55); m.add(core);
+    m.userData.fl = [];
+    for (let i = 0; i < 3; i++) {
+      const fl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: i ? 0xff6a1a : 0xffa53a, transparent: true, opacity: 0.55 - i * 0.12, depthWrite: false }));
+      fl.scale.setScalar(p.r * (0.85 + i * 0.3)); m.add(fl); m.userData.fl.push(fl);
     }
   } else if (p.type === 'disc') {
     m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, 4, 24), new THREE.MeshStandardMaterial({ color: 0xcfe6ff, metalness: 0.85, roughness: 0.15 }));
@@ -400,6 +457,16 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     const px = G.lerp(p.px, p.x, alpha), py = G.lerp(p.py, p.y, alpha);
     m.position.set(px, -py, 0);
     if (p.type === 'arrow' || p.type === 'bullet') m.rotation.set(0, 0, Math.atan2(-p.vy, p.vx));
+    else if (p.type === 'shard') { m.rotation.set(p.age * 0.3, 0, Math.atan2(-p.vy, p.vx)); }
+    else if (p.type === 'fireball') {
+      m.userData.fl.forEach((fl, i) => { fl.scale.setScalar(p.r * (0.85 + i * 0.3) * (1 + Math.sin(p.age * 0.7 + i * 2) * 0.12)); fl.position.set(-i * p.r * 0.25, Math.sin(p.age * 0.5 + i) * 1.5, 0); });
+      m.rotation.z = Math.atan2(-p.vy, p.vx);
+    }
+    else if (p.type === 'drill') {
+      m.rotation.set(0, 0, Math.atan2(-p.vy, p.vx));
+      m.userData.spin.rotation.x = p.age * (p.grip ? 1.1 : 0.7); // 巻き込んでいる間はもっと速く回る
+      m.userData.winds.forEach((w, i) => { w.scale.setScalar(1 + Math.sin(p.age * 0.5 + i) * 0.12 + (p.grip ? 0.35 : 0)); });
+    }
     else if (p.type === 'disc') m.rotation.set(Math.PI / 2 - 0.4, 0, p.age * 0.4);
     else if (p.type === 'wave') {
       const d = p.vx < 0 ? Math.PI : 0;
