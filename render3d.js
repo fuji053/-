@@ -6,7 +6,7 @@
 'use strict';
 (() => {
 const R = { ready: false };
-let renderer, scene, camera, cv, stage, bgPlane, rocks = [];
+let renderer, scene, camera, cv;
 const rigs = new Map();
 const projMeshes = new Map();
 const FOV = 30;
@@ -24,12 +24,8 @@ R.init = function (view) {
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x161c40, 1600, 4200);
   camera = new THREE.PerspectiveCamera(FOV, 1, 20, 9000);
-  // 光
-  scene.add(new THREE.HemisphereLight(0xc8d8ff, 0x2a2350, 0.62));
-  const key = new THREE.DirectionalLight(0xffffff, 0.85); key.position.set(-400, 700, 600); scene.add(key);
-  const rim = new THREE.DirectionalLight(0x8fb0ff, 0.55); rim.position.set(500, 300, -500); scene.add(rim);
-  buildBackground();
-  buildStage();
+  // ステージ（背景・床・光）は stages3d.js で作る
+  R.setStage(window.__game.D.stages ? window.__game.D.stages[0].id : 'temple');
   R.resize(view);
   R.ready = true;
 };
@@ -41,55 +37,11 @@ R.resize = function (view) {
   camera.updateProjectionMatrix();
 };
 R.hide = function () { if (cv) cv.style.display = 'none'; };
-
-/* ---------- 背景 ---------- */
-function buildBackground() {
-  const c = document.createElement('canvas'); c.width = 4; c.height = 256;
-  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#070b20'); gr.addColorStop(0.55, '#1b2552'); gr.addColorStop(1, '#3a2f66');
-  g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
-  const tex = new THREE.CanvasTexture(c);
-  bgPlane = new THREE.Mesh(new THREE.PlaneGeometry(16000, 9000), new THREE.MeshBasicMaterial({ map: tex, fog: false, depthWrite: false }));
-  bgPlane.position.set(0, 200, -4000);
-  scene.add(bgPlane);
-  // 星
-  const n = 500, pos = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * 9000; pos[i * 3 + 1] = Math.random() * 4500 - 900; pos[i * 3 + 2] = -3500 + Math.random() * 400; }
-  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: true, fog: false, transparent: true, opacity: 0.8 })));
-  // 遠くに浮かぶ岩（奥行きを出すため）
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x3b3f73, roughness: 0.9, flatShading: true });
-  const spots = [[-1500, -150, -1400, 120], [1300, 80, -1700, 160], [-700, 380, -2200, 110], [800, -300, -1100, 80], [2100, 300, -2500, 200], [-2300, 50, -2300, 180]];
-  for (const [x, y, z, s] of spots) {
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
-    m.position.set(x, y, z); m.scale.y = 0.6; m.rotation.set(Math.random(), Math.random(), 0);
-    m.userData.base = y; m.userData.ph = Math.random() * 6;
-    scene.add(m); rocks.push(m);
-  }
-}
-/* ---------- ステージ ---------- */
-function buildStage() {
-  const G = window.__game, hw = G.ST.halfWidth, th = G.ST.thickness;
-  stage = new THREE.Group();
-  const shape = new THREE.Shape();
-  shape.moveTo(-hw, 0); shape.lineTo(hw, 0); shape.lineTo(hw - 30, -th); shape.lineTo(hw - 170, -th - 80);
-  shape.lineTo(-hw + 170, -th - 80); shape.lineTo(-hw + 30, -th); shape.lineTo(-hw, 0);
-  const depth = 260;
-  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 4, bevelThickness: 4, bevelSegments: 2 }),
-    new THREE.MeshStandardMaterial({ color: 0x343a78, roughness: 0.85, metalness: 0.1 }));
-  body.position.z = -depth / 2 - 70;
-  stage.add(body);
-  const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 6, depth + 8), new THREE.MeshStandardMaterial({ color: 0x7f88d6, roughness: 0.45, metalness: 0.2 }));
-  top.position.set(0, -3, -70);
-  stage.add(top);
-  const edge = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 3, 3), new THREE.MeshBasicMaterial({ color: 0xe6e9ff }));
-  edge.position.set(0, 0, depth / 2 - 66);
-  stage.add(edge);
-  // 中央のライン模様
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xbfc6ff, transparent: true, opacity: 0.35 });
-  for (const z of [-150, 10]) { const l = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 - 60, 0.5, 2), lineMat); l.position.set(0, 0.3, z); stage.add(l); }
-  scene.add(stage);
-}
+R.setStage = function (id) {
+  if (!window.Stages3D) return;
+  if (window.Stages3D.cur && window.Stages3D.cur.id === id) return;
+  window.Stages3D.build(scene, renderer, id, window.__game);
+};
 
 /* ---------- キャラの立体（骨組みに合わせて円柱と球を並べる） ---------- */
 function makeRig(f) {
@@ -212,7 +164,8 @@ function updateRig(rig, f, alpha, G) {
   const target = f.facing > 0 ? -0.35 : -(Math.PI - 0.35);
   rig.yaw += (target - rig.yaw) * 0.35;
   g.rotation.y = rig.yaw + (pose.yw || 0) * Math.PI / 180; // 回転する技（旋風脚・サイクロンアッパーなど）
-  g.position.set(x, -y, 0);
+  const dz = G.lerp(f.prevDepth || 0, f.depthZ || 0, alpha);
+  g.position.set(x, -y, dz);
   const zw = rig.zw;
   const P = {};
   for (const k in pts) {
@@ -292,13 +245,18 @@ function updateRig(rig, f, alpha, G) {
     rig.bladeMat.emissive.setHex(act ? 0x406080 : (f.activeWindow('counter') ? 0x5090c0 : 0x000000));
   }
   if (rig.gun) {
-    const ang = Math.atan2(uy, ux);
+    // 銃口は、腕をまっすぐ前に伸ばしたとき（ねらうとき）は腕の向き、それ以外は前向き（少し下）
+    const armA = Math.atan2(uy, ux), aimW = G.clamp((ux - 0.35) / 0.5, 0, 1);
+    const ang = -0.25 + (armA + 0.25) * aimW;
     rig.gun.position.set(fH3.x, fH3.y, fH3.z + 1.5);
     rig.gun.rotation.set(0, 0, ang - Math.PI / 2);
+    // 銃を使う技のときだけ手に持つ（それ以外はホルスターにしまっている）
+    const m = f.state === 'move' && f.move;
+    rig.gun.visible = !!(m && m.poses && m.poses.some(k => k[1] === 'gunAim' || k[1] === 'gunFire')) || f.state === 'victory';
     // 覚醒の演出中：外したサングラスを手に持つ（その間ピストルはしまう）
     const aw = G.state.battle && G.state.battle.awaken;
     const showShades = !!(rig.shades && aw && aw.f === f && aw.t >= 28);
-    rig.gun.visible = !(aw && aw.f === f);
+    if (aw && aw.f === f) rig.gun.visible = false;
     if (rig.shades) {
       rig.shades.visible = showShades;
       if (showShades) { rig.shades.position.set(fH3.x + ux * 4, fH3.y + uy * 4, fH3.z + 3); rig.shades.rotation.set(0, 0, ang); }
@@ -347,11 +305,15 @@ function updateRig(rig, f, alpha, G) {
     rig.bubble.position.set(x, -(y - 45), 0);
     rig.bubble.scale.setScalar(20 + 34 * (f.shieldHP / G.PH.shieldMax));
   }
-  // 影
-  if (Math.abs(x) <= G.ST.halfWidth + 10 && y > -300) {
+  // 影（真下にある床：すり抜け床かステージ）
+  let gy = null;
+  const bt = G.state.battle;
+  for (const p of (bt && bt.plats) || []) if (Math.abs(x - p.x) <= p.w / 2 && p.y >= y - 1 && (gy === null || p.y < gy)) gy = p.y;
+  if (gy === null && Math.abs(x) <= G.ST.halfWidth + 10 && y <= 1) gy = 0;
+  if (gy !== null && y > gy - 300) {
     rig.shadow.visible = true;
-    rig.shadow.position.set(x, 0.6, 0);
-    const s = G.clamp(1 + y / 400, 0.3, 1);
+    rig.shadow.position.set(x, -gy + 0.6, 0);
+    const s = G.clamp(1 + (y - gy) / 400, 0.3, 1);
     rig.shadow.scale.set(s, s * 0.6, 1);
     rig.shadow.material.opacity = 0.3 * s;
   }
@@ -416,12 +378,12 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
   const z = cam.z;
   const d = (view.h / z / 2) / Math.tan(FOV * Math.PI / 360);
   const cx = cam.x - sx / z, cy = -(cam.y) + sy / z;
-  camera.position.set(cx, cy, d);
+  // 少し上から見下ろす（床の上面と奥行きが見えて「ステージ」らしくなる）
+  const PITCH = 9 * Math.PI / 180;
+  camera.position.set(cx, cy + Math.sin(PITCH) * d, Math.cos(PITCH) * d);
   camera.lookAt(cx, cy, 0);
-  // 岩をゆっくり浮かせる
-  const t = performance.now() / 1000;
-  for (const r of rocks) { r.position.y = r.userData.base + Math.sin(t * 0.4 + r.userData.ph) * 20; r.rotation.y += 0.001; }
-  bgPlane.position.x = cam.x * 0.7;
+  // 背景をカメラに少しついていかせる・粒を動かす
+  if (window.Stages3D) window.Stages3D.update(cam, cy);
   // キャラ
   const seen = new Set();
   for (const f of b.f) {

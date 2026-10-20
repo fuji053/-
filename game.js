@@ -53,17 +53,26 @@ const store = {
    iPhoneは画面に最初にふれたときから音が出せるようになります
    ===================================================================== */
 const SFX = (() => {
-  let ac = null, master = null, noiseBuf = null;
+  let ac = null, master = null, sfxBus = null, musicBus = null, verb = null, noiseBuf = null;
   const lastT = {};
+  let musicVol = store.get('bgm', 1) ? 0.32 : 0;
   function unlock() {
     try {
       if (!ac) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return;
         ac = new AC();
-        master = ac.createGain(); master.gain.value = 0.55;
         const comp = ac.createDynamicsCompressor(); // 音が重なっても割れないように
-        master.connect(comp); comp.connect(ac.destination);
+        comp.threshold.value = -14; comp.ratio.value = 4;
+        master = ac.createGain(); master.gain.value = 0.9; master.connect(comp); comp.connect(ac.destination);
+        sfxBus = ac.createGain(); sfxBus.gain.value = 0.62; sfxBus.connect(master);
+        musicBus = ac.createGain(); musicBus.gain.value = musicVol; musicBus.connect(master);
+        // 残響（ホールの響き）：打撃の「重さ」と空間の広さを出す
+        verb = ac.createConvolver();
+        const len = Math.floor(ac.sampleRate * 1.4), ir = ac.createBuffer(2, len, ac.sampleRate);
+        for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+        verb.buffer = ir;
+        const vg = ac.createGain(); vg.gain.value = 0.5; verb.connect(vg); vg.connect(sfxBus);
         const n = ac.sampleRate;
         noiseBuf = ac.createBuffer(1, n, n);
         const d = noiseBuf.getChannelData(0);
@@ -79,43 +88,55 @@ const SFX = (() => {
     g.gain.exponentialRampToValueAtTime(peak, t0 + a);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   }
-  function tone(type, f0, f1, dur, vol, delay = 0) {
+  // rv = 残響に送る量（0〜1）
+  function out(g, rv) { g.connect(sfxBus); if (rv) { const s = ac.createGain(); s.gain.value = rv; g.connect(s); s.connect(verb); } }
+  function tone(type, f0, f1, dur, vol, delay = 0, rv = 0) {
     const t0 = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
     env(g, t0, 0.004, vol, dur);
-    o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+    o.connect(g); out(g, rv); o.start(t0); o.stop(t0 + dur + 0.02);
   }
-  function noise(dur, vol, f0, f1, q = 1, kind = 'bandpass', delay = 0) {
+  function noise(dur, vol, f0, f1, q = 1, kind = 'bandpass', delay = 0, rv = 0) {
     const t0 = ac.currentTime + delay, s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
     s.buffer = noiseBuf; fl.type = kind; fl.Q.value = q;
     fl.frequency.setValueAtTime(f0, t0); fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t0 + dur);
     env(g, t0, 0.003, vol, dur);
-    s.connect(fl); fl.connect(g); g.connect(master); s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.02);
+    s.connect(fl); fl.connect(g); out(g, rv); s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.02);
   }
+  // 体に当たったときの「ドスッ」（低い音の芯）
+  function thud(f, dur, vol, rv) { tone('sine', f, f * 0.42, dur, vol, 0, rv); tone('triangle', f * 1.9, f * 0.6, dur * 0.5, vol * 0.35, 0, rv); }
   const lib = {
-    hitL()  { noise(0.07, 0.35, 3200, 1400, 1.2); tone('square', 260, 120, 0.05, 0.08); },
-    hitM()  { noise(0.12, 0.55, 2200, 500, 0.9); tone('sine', 190, 60, 0.14, 0.45); },
-    hitH()  { noise(0.22, 0.8, 1800, 260, 0.7); tone('sine', 140, 38, 0.32, 0.8); tone('square', 90, 40, 0.12, 0.12); },
-    armor() { tone('triangle', 420, 300, 0.09, 0.3); noise(0.06, 0.25, 1500, 900, 2); },
-    shield(){ tone('sine', 700, 520, 0.08, 0.25); noise(0.05, 0.2, 4000, 2500, 3); },
-    meteor(){ tone('sine', 220, 30, 0.55, 0.9); noise(0.35, 0.8, 900, 80, 0.6, 'lowpass'); tone('sawtooth', 300, 60, 0.25, 0.12); },
-    cine()  { noise(0.08, 0.9, 6000, 3000, 0.8, 'highpass'); tone('sine', 110, 28, 1.0, 0.95); noise(0.9, 0.45, 600, 60, 0.5, 'lowpass', 0.03); },
-    ko()    { noise(0.5, 0.7, 400, 3000, 0.8); tone('sine', 90, 30, 0.8, 0.9, 0.05); noise(0.7, 0.6, 1200, 80, 0.5, 'lowpass', 0.08); },
-    shoot(p){ noise(0.09, 0.3 + p * 0.25, 2500, 6000, 1.5); tone('triangle', 900 + p * 500, 260, 0.12, 0.18 + p * 0.12); },
-    charged(){ tone('sine', 988, 988, 0.18, 0.22); tone('sine', 1480, 1480, 0.26, 0.18, 0.06); },
-    jump()  { tone('sine', 320, 620, 0.09, 0.12); },
-    grab()  { tone('square', 180, 120, 0.07, 0.14); noise(0.05, 0.25, 1200, 700, 2); },
-    reflect(){ tone('triangle', 1300, 2100, 0.14, 0.25); tone('sine', 2600, 2600, 0.12, 0.08, 0.03); },
-    quake() { noise(0.4, 0.75, 500, 60, 0.6, 'lowpass'); tone('sine', 75, 35, 0.4, 0.7); },
-    swing(p){ noise(0.1 + p * 0.06, 0.12 + p * 0.18, 500, 2200, 1.4); },
+    hitL()  { noise(0.05, 0.4, 3600, 1600, 1.1); thud(150, 0.09, 0.45, 0.05); noise(0.08, 0.25, 900, 300, 0.8, 'lowpass'); },
+    hitM()  { noise(0.06, 0.6, 3000, 1200, 0.9); thud(115, 0.18, 0.8, 0.15); noise(0.16, 0.5, 1100, 220, 0.7, 'lowpass', 0, 0.12); },
+    hitH()  { noise(0.08, 0.85, 5000, 1500, 0.7, 'highpass'); thud(88, 0.42, 1.0, 0.35); noise(0.32, 0.8, 1300, 120, 0.6, 'lowpass', 0.01, 0.3); tone('square', 70, 32, 0.16, 0.14, 0, 0.2); },
+    armor() { tone('triangle', 420, 300, 0.09, 0.3); noise(0.06, 0.25, 1500, 900, 2); thud(130, 0.1, 0.4, 0.1); },
+    shield(){ tone('sine', 760, 560, 0.1, 0.25, 0, 0.15); noise(0.05, 0.22, 4200, 2500, 3); },
+    meteor(){ tone('sine', 220, 30, 0.6, 0.95, 0, 0.4); noise(0.4, 0.85, 900, 70, 0.6, 'lowpass', 0, 0.35); tone('sawtooth', 300, 60, 0.25, 0.12); },
+    cine()  { noise(0.08, 0.9, 6000, 3000, 0.8, 'highpass'); tone('sine', 110, 26, 1.1, 1.0, 0, 0.5); noise(0.9, 0.45, 600, 60, 0.5, 'lowpass', 0.03, 0.4); },
+    ko()    { noise(0.6, 0.85, 300, 3600, 0.8, 'bandpass', 0, 0.4); tone('sine', 85, 28, 0.9, 1.0, 0.04, 0.5); noise(0.9, 0.7, 1400, 70, 0.5, 'lowpass', 0.08, 0.5); tone('sawtooth', 200, 900, 0.5, 0.08, 0.1, 0.5); },
+    shoot(p){ noise(0.09, 0.3 + p * 0.25, 2500, 6000, 1.5); tone('triangle', 900 + p * 500, 260, 0.12, 0.18 + p * 0.12, 0, 0.1); },
+    charged(){ tone('sine', 988, 988, 0.18, 0.22, 0, 0.3); tone('sine', 1480, 1480, 0.26, 0.18, 0.06, 0.3); },
+    jump()  { noise(0.08, 0.14, 600, 1800, 1); tone('sine', 300, 560, 0.08, 0.08); },
+    land(p) { thud(70 + 20 * (1 - p), 0.12 + p * 0.12, 0.25 + p * 0.5, 0.1); noise(0.12, 0.12 + p * 0.25, 600, 150, 0.7, 'lowpass'); },
+    grab()  { tone('square', 180, 120, 0.07, 0.14); noise(0.05, 0.25, 1200, 700, 2); thud(160, 0.07, 0.3); },
+    reflect(){ tone('triangle', 1300, 2100, 0.14, 0.25, 0, 0.3); tone('sine', 2600, 2600, 0.12, 0.08, 0.03, 0.3); },
+    quake() { noise(0.45, 0.8, 500, 50, 0.6, 'lowpass', 0, 0.3); tone('sine', 72, 32, 0.45, 0.85, 0, 0.3); },
+    // 空を切る音：強い攻撃ほど低く太い
+    swing(p){ noise(0.12 + p * 0.1, 0.16 + p * 0.25, 350 - p * 120, 2400 - p * 900, 1.3); noise(0.08 + p * 0.06, 0.08 + p * 0.12, 3000, 900, 0.8, 'bandpass', 0.03); },
     tech()  { tone('triangle', 600, 900, 0.07, 0.15); },
-    gun(p)  { noise(0.06, 0.45 + p * 0.3, 3500, 900, 0.9); tone('square', 520 - p * 200, 90, 0.07, 0.15 + p * 0.15); },
-    slash() { noise(0.16, 0.35, 1800, 6000, 2.2, 'bandpass'); tone('triangle', 1400, 600, 0.12, 0.08); },
-    puff()  { noise(0.45, 0.4, 900, 200, 0.5, 'lowpass'); },
-    boom()  { noise(0.5, 0.95, 1600, 90, 0.6, 'lowpass'); tone('sine', 110, 30, 0.5, 0.9); tone('square', 160, 50, 0.18, 0.15); },
+    gun(p)  { noise(0.06, 0.55 + p * 0.3, 3500, 900, 0.9, 'bandpass', 0, 0.25); thud(140 - p * 40, 0.08, 0.35 + p * 0.3); tone('square', 520 - p * 200, 90, 0.07, 0.12 + p * 0.12); },
+    slash() { noise(0.18, 0.35, 1800, 6500, 2.2, 'bandpass', 0, 0.15); tone('sine', 2400, 2300, 0.25, 0.06, 0.02, 0.4); tone('sine', 3600, 3500, 0.2, 0.04, 0.02, 0.4); },
+    puff()  { noise(0.5, 0.45, 900, 180, 0.5, 'lowpass', 0, 0.3); },
+    boom()  { noise(0.6, 1.0, 1600, 70, 0.6, 'lowpass', 0, 0.45); thud(100, 0.6, 1.0, 0.5); tone('square', 160, 45, 0.2, 0.15); },
     wire()  { noise(0.12, 0.25, 4000, 8000, 3, 'highpass'); tone('triangle', 1800, 900, 0.1, 0.08); },
-    zap()   { tone('sawtooth', 1400, 300, 0.16, 0.18); noise(0.18, 0.35, 5000, 2000, 2.5); tone('square', 2200, 800, 0.1, 0.06, 0.05); },
-    change(){ tone('sine', 660, 1320, 0.22, 0.22); noise(0.3, 0.3, 3000, 8000, 1, 'highpass', 0.05); },
+    dodge() { noise(0.14, 0.22, 700, 3200, 1.2); },
+    zap()   { tone('sawtooth', 1400, 300, 0.16, 0.18, 0, 0.2); noise(0.18, 0.35, 5000, 2000, 2.5); tone('square', 2200, 800, 0.1, 0.06, 0.05); },
+    change(){ tone('sine', 660, 1320, 0.22, 0.22, 0, 0.4); noise(0.3, 0.3, 3000, 8000, 1, 'highpass', 0.05, 0.3); },
+    // 試合の流れ
+    count() { tone('square', 660, 660, 0.14, 0.18, 0, 0.3); tone('sine', 1320, 1320, 0.12, 0.1, 0, 0.3); },
+    go()    { tone('sawtooth', 880, 880, 0.5, 0.16, 0, 0.5); tone('square', 1320, 1320, 0.45, 0.12, 0.02, 0.5); tone('sine', 440, 440, 0.6, 0.3, 0, 0.5); noise(0.4, 0.3, 6000, 2000, 0.8, 'highpass', 0, 0.4); },
+    game()  { tone('sine', 110, 40, 1.2, 1.0, 0, 0.6); noise(0.8, 0.8, 4000, 200, 0.6, 'lowpass', 0, 0.6); tone('sawtooth', 220, 110, 0.8, 0.12, 0.05, 0.6); },
+    blast() { noise(0.8, 0.9, 200, 5000, 0.7, 'bandpass', 0, 0.5); tone('sawtooth', 120, 1600, 0.6, 0.1, 0.05, 0.5); },
   };
   return {
     unlock,
@@ -127,6 +148,11 @@ const SFX = (() => {
       try { lib[name](p); } catch (e) { /* 無視 */ }
     },
     get ready() { return !!ac && ac.state === 'running'; },
+    // BGM（music.js）が使う音の出口
+    audio() { return ac && ac.state === 'running' ? { ac, bus: musicBus, verb, noise: noiseBuf } : null; },
+    setMusic(on) { musicVol = on ? 0.32 : 0; store.set('bgm', on ? 1 : 0); if (musicBus) musicBus.gain.setTargetAtTime(musicVol, ac.currentTime, 0.1); },
+    get musicOn() { return musicVol > 0; },
+    duck(on) { if (musicBus) musicBus.gain.setTargetAtTime(on ? musicVol * 0.3 : musicVol, ac.currentTime, 0.15); },
   };
 })();
 
@@ -135,25 +161,25 @@ const PK = ['t', 'fa1', 'fa2', 'ba1', 'ba2', 'fl1', 'fl2', 'bl1', 'bl2', 'r', 't
 function P(t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r = 0, tw = 0) { return { t, fa1, fa2, ba1, ba2, fl1, fl2, bl1, bl2, r, tw, yw: 0, wr: 0, pa: 0 }; }
 const POSES = {
   // 立ち・移動
-  idle:         P(6, 25, 80, -12, 90, 16, -14, -16, -8, 0, 0.15),
-  idle2:        P(9, 30, 88, -8, 98, 20, -24, -14, -16, 0, 0.1),
+  idle:         P(10, 40, 100, 15, 115, 26, -34, -22, -24, 0, 0.3),
+  idle2:        P(12, 44, 106, 18, 120, 29, -40, -20, -30, 0, 0.25),
   walk1:        P(8, -22, 30, 28, 34, 30, -12, -22, -40),
   walk2:        P(8, 6, 30, 2, 30, 4, -45, 6, -10),
   walk3:        P(8, 28, 34, -22, 30, -22, -40, 30, -12),
   walk4:        P(8, 2, 30, 6, 30, 6, -10, 4, -45),
-  run1:         P(22, -45, 95, 55, 80, 70, -95, -45, -60),
-  run2:         P(24, 5, 90, 10, 90, 15, -120, 10, -30),
-  run3:         P(22, 55, 80, -45, 95, -45, -60, 70, -95),
-  run4:         P(24, 10, 90, 5, 90, 10, -30, 15, -120),
+  run1:         P(18, -40, 85, 60, 95, 48, -22, -38, -75, 0, -0.35),
+  run2:         P(21, 10, 95, 15, 95, 12, -45, -12, -115, 0, 0),
+  run3:         P(18, 60, 95, -40, 85, -38, -75, 48, -22, 0, 0.35),
+  run4:         P(21, 15, 95, 10, 95, -12, -115, 12, -45, 0, 0),
   dashStart:    P(30, -40, 90, 50, 70, 60, -90, -40, -30, 0, 0.3),
   skid:         P(-14, 40, 60, 60, 70, 40, -10, -10, -60),
   crouch:       P(30, 35, 70, 15, 80, 72, -122, -12, -100),
   // 空中
-  takeoff:      P(-4, 145, 20, 125, 30, 10, -10, -12, -25),
-  jump:         P(0, 112, 45, 96, 55, 50, -85, -5, -60),
-  tuck:         P(10, 70, 110, 60, 110, 95, -140, 70, -140),
-  fall:         P(4, 120, 35, 105, 45, 22, -26, -16, -36),
-  fastfall:     P(0, 150, 20, 140, 25, 5, -8, -5, -12),
+  takeoff:      P(-6, 150, 25, 110, 40, 15, -12, -18, -30, 0, 0.2),
+  jump:         P(-4, 120, 45, 25, 60, 72, -108, -12, -42, 0, 0.25),
+  tuck:         P(14, 75, 115, 55, 120, 100, -135, 62, -130, 0, -0.15),
+  fall:         P(6, 50, 30, -25, 60, 45, -72, -18, -26, 0, -0.2),
+  fastfall:     P(0, 155, 25, 130, 35, 10, -15, -8, -22),
   helpless:     P(0, 165, 5, 175, 0, 10, -15, -12, -10),
   // 防御・やられ
   shield:       P(10, 60, 110, 40, 120, 30, -40, -28, -18),
@@ -170,21 +196,21 @@ const POSES = {
   ledgeClimb:   P(40, 120, 40, 110, 40, 100, -140, 40, -120),
   getupSweep:   P(30, 60, 30, -60, 40, 90, 0, -80, 0),
   // 攻撃（素手）
-  jabReady:     P(10, 35, 95, -5, 100, 25, -20, -22, -8, 0, -0.2),
-  punchWind:    P(-6, -35, 125, 45, 85, 30, -30, -25, -10, 0, -0.6),
-  punch:        P(18, 82, 0, -45, 70, 40, -32, -32, 0, 0, 0.6),
-  punch2:       P(20, -30, 100, 85, 0, 35, -25, -35, -5, 0, -0.6),
-  roundKick:    P(-28, 20, 60, -40, 60, 100, 0, -12, -6, 0, 0.8),
+  jabReady:     P(12, 45, 105, 15, 118, 30, -38, -24, -22, 0, 0.1),
+  punchWind:    P(-4, 20, 125, 35, 115, 32, -45, -26, -26, 0, -0.7),
+  punch:        P(22, 86, 5, 20, 120, 55, -55, -38, -5, 0, 0.9),
+  punch2:       P(24, 25, 115, 86, 5, 50, -50, -40, -5, 0, -0.9),
+  roundKick:    P(-30, 65, 55, -55, 45, 112, -8, 0, -24, 0, 0.8),
   uppercutWind: P(26, -10, 40, 60, 85, 70, -105, 0, -60, 0, -0.6),
   uppercut:     P(-12, 172, 0, 25, 70, 12, -12, -20, -10, 0, 0.6),
   sweepWind:    P(36, 40, 30, 20, 40, 75, -120, -10, -90),
   sweep:        P(32, 55, 20, -10, 50, 88, 0, -15, -100),
-  kickWind:     P(-10, 20, 65, -20, 65, 92, -115, -6, -6),
-  kick:         P(-25, -20, 45, -40, 45, 95, 0, -10, -5, 0, 0.4),
-  upKick:       P(-20, 40, 40, 20, 40, 165, 0, -20, -30),
+  kickWind:     P(-8, 35, 110, 20, 120, 112, -140, -10, -14, 0, -0.3),
+  kick:         P(-24, 40, 95, -45, 55, 96, -6, -2, -22, 0, 0.3),
+  upKick:       P(-22, 60, 70, -40, 55, 160, -5, -8, -24, 0, 0.2),
   stomp:        P(0, 125, 25, 115, 25, 0, 0, 25, -90),
-  backKickWind: P(10, 40, 80, 30, 80, 60, -110, 40, -130),
-  backKick:     P(22, 45, 70, 30, 70, 50, -90, -110, 0, 0, -0.3),
+  backKickWind: P(14, 40, 90, 30, 100, 60, -100, 50, -130, 0, -0.2),
+  backKick:     P(30, 40, 95, 25, 105, 50, -90, -110, -4, 0, -0.4),
   nairSpread:   P(0, 90, 0, -90, 0, 80, 0, -60, -20),
   overheadWind: P(-22, 170, 30, 160, 30, 25, -30, -25, -15),
   overheadSlam: P(38, 60, 0, 60, 0, 55, -70, -35, -15),
@@ -232,7 +258,7 @@ const POSES = {
   bowSweepWind: P(-5, -100, 0, 40, 85, 30, -30, -25, -10, 0, -0.8),
   bowSweep:     P(22, 95, 0, -30, 70, 45, -40, -35, 0, 0, 0.8),
   sideKickWind: P(-15, 40, 95, 20, 95, 100, -135, -10, -8, 0, -0.3),
-  sideKick:     P(-35, 10, 85, -20, 75, 98, 0, -12, -6, 0, 0.2),
+  sideKick:     P(-35, 30, 95, -50, 50, 98, 0, -4, -22, 0, 0.2),
   bowSpinUp:    P(-6, 165, 0, 60, 85, 20, -20, -20, -10),
   staffWind:    P(-15, -120, 0, -60, 40, 30, -30, -35, -10, 0, -1),
   staffSwing:   P(30, 90, 0, 70, 10, 60, -60, -40, 0, 0, 1),
@@ -243,18 +269,18 @@ const POSES = {
   spearWind:    P(-5, 60, 45, 70, 140, 30, -30, -25, -10, 0, -0.5),
   spearThrust:  P(25, 90, 0, 90, 15, 60, -50, -40, 0, 0, 0.6),
   // 拳闘士（プロレスラー）
-  chopWind:     P(-5, -60, 60, 30, 95, 30, -25, -25, -8, 0, -0.7),
-  chop:         P(20, 85, 10, -30, 85, 40, -30, -32, 0, 0, 0.7),
+  chopWind:     P(-8, -50, 70, 40, 110, 32, -45, -28, -28, 0, -1),
+  chop:         P(24, 88, 10, 10, 115, 55, -60, -40, -6, 0, 1.05),
   elbowWind:    P(0, -20, 140, 30, 95, 30, -25, -25, -8, 0, -0.4),
   elbow:        P(22, 75, 150, -30, 85, 45, -35, -32, 0, 0, 0.8),
   headbuttWind: P(-25, 30, 95, 30, 95, 25, -30, -25, -10),
   headbutt:     P(50, 20, 85, 10, 85, 55, -50, -40, 0),
-  bigBootWind:  P(-5, 30, 85, 10, 85, 110, -140, -8, -6),
-  bigBoot:      P(-30, 10, 75, -10, 75, 100, 0, -10, -6),
+  bigBootWind:  P(-8, 35, 105, 20, 115, 112, -140, -12, -16, 0, -0.2),
+  bigBoot:      P(-28, 40, 95, -40, 60, 100, -4, -4, -24, 0, 0.3),
   elbowUpWind:  P(25, -10, 140, 40, 95, 60, -90, -5, -50),
   elbowUp:      P(-15, 150, 150, 30, 85, 15, -15, -20, -10, 0, 0.6),
   slide:        Object.assign(P(-60, 150, 20, 160, 20, 85, 0, 60, -40), { pa: 1 }),
-  lariatWind:   P(-10, -90, 20, 40, 85, 30, -30, -30, -10, 0, -1),
+  lariatWind:   P(-12, -90, 20, 40, 95, 35, -50, -32, -30, 0, -1),
   lariatFull:   P(15, 90, 0, -60, 40, 55, -50, -40, 0, 0, 1),
   headbuttUp:   P(-5, -30, 40, -40, 40, 10, 0, -10, 0),
   stompWind:    P(0, 60, 60, 60, 60, 100, -110, -10, -10),
@@ -271,6 +297,20 @@ const POSES = {
   divingElbow:  P(0, 10, 150, 30, 125, 20, -60, -10, -60, 60),
   germanWind:   P(10, 80, 30, 80, 30, 50, -60, -30, -20),
   germanBridge: Object.assign(P(-30, 150, 20, 150, 20, 60, -100, 40, -110, -110), { pa: 1 }),
+  // 勝利ポーズ
+  flexWin:      P(-6, 160, 130, 160, 130, 22, -26, -22, -24, 0, 0.1),
+  pointUp:      P(-4, 178, 0, 70, 120, 22, -26, -22, -24, 0, 0.3),
+  kSheathe:     Object.assign(P(6, 15, 100, 25, 110, 14, -14, -16, -12, 0, -0.5), { wr: 180 }),
+  bowRest:      P(4, 10, 25, 75, 70, 14, -12, -16, -10, 0, 0.3),
+  agentWin:     P(-6, 150, 150, 10, 115, 16, -10, -24, -14, 0, 0.45),
+  // 回避
+  dodgeSpot:    P(-14, 60, 130, 50, 125, 40, -75, -35, -55, 0, -1),
+  dodgeAir:     P(0, 70, 120, 60, 125, 80, -120, 40, -110, 0, -0.6),
+  // 武器ごとの構え（立っているとき）
+  idle_bow:     P(8, 18, 35, 20, 75, 24, -30, -20, -22, 0, 0.2),
+  idle2_bow:    P(10, 20, 40, 22, 80, 27, -36, -18, -28, 0, 0.18),
+  idle_katana:  P(12, 50, 70, 40, 95, 28, -38, -22, -26, 0, 0.25),
+  idle2_katana: P(14, 54, 74, 42, 98, 31, -44, -20, -32, 0, 0.2),
   // 狐の剣士（刀は前の手に持ち、前腕の向きに伸びる）
   kReady:       P(12, 55, 70, 40, 90, 25, -30, -25, -12, 0, 0.2),
   kSlashWind:   P(-8, 150, 30, 120, 50, 30, -35, -25, -10, 0, -0.6),
@@ -284,7 +324,7 @@ const POSES = {
   kBack:        P(5, -100, 0, 40, 80, 30, -30, -25, -10, 0, -0.3),
   kLowWind:     P(30, -75, 0, 20, 60, 72, -118, -10, -92, 0, -0.6),
   kLowSweep:    P(36, 25, 0, 10, 60, 72, -118, -10, -92, 0, 0.7),
-  iaiWind:      Object.assign(P(28, 20, 100, 30, 110, 75, -115, -25, -60, 0, -1), { wr: 180 }),
+  iaiWind:      Object.assign(P(26, 20, 100, 30, 110, 62, -92, -25, -48, 0, -1), { wr: 180 }),
   iaiSlash:     P(32, 68, 0, -60, 30, 85, -70, -45, -5, 0, 1),
   kDownThrust:  P(0, 10, 0, 20, 10, 40, -80, 10, -80),
   kCounter:     P(-5, 50, 100, 40, 110, 30, -40, -28, -10, 0, -0.3),
@@ -460,8 +500,20 @@ function stickDir(x, y) {
    ===================================================================== */
 // 状態ごとのポーズの追従のしかた（k=かたさ、d=ゆれの残り方）
 const SPRING = {
-  move: [0.62, 0.32], loco: [0.34, 0.5], air: [0.3, 0.5], hurt: [0.4, 0.62], soft: [0.26, 0.55], snap: [0.8, 0.2],
+  move: [0.62, 0.32], loco: [0.34, 0.5], air: [0.24, 0.6], hurt: [0.4, 0.62], soft: [0.26, 0.55], snap: [0.8, 0.2], land: [0.3, 0.58],
 };
+// 体の中心が先に動き、手足の先は少し遅れてついてくる（しなり）。1 = 体幹と同じ速さ
+// 勝利ポーズ [コマ, ポーズ名]
+const VICTORY = {
+  fist:  [[0, 'chopWind'], [14, 'flexWin'], [40, 'flexWin'], [60, 'pointUp'], [100, 'pointUp']],
+  fox:   [[0, 'kSlash'], [10, 'kUpArc'], [26, 'kSheathe'], [60, 'kSheathe']],
+  bow:   [[0, 'aimUp'], [22, 'releaseUp'], [40, 'bowRest'], [70, 'bowRest']],
+  agent: [[0, 'gunAim'], [16, 'agentWin'], [60, 'agentWin']],
+  default: [[0, 'idle'], [30, 'idle']],
+};
+// 回避（その場回避・前後回避・空中回避）：dur = 全体のコマ数、inv = 無敵のコマ [始まり, 終わり]
+const DODGE = { spot: { dur: 26, inv: [3, 17] }, roll: { dur: 30, inv: [4, 18], dist: 115 }, air: { dur: 36, inv: [3, 22], speed: 9.5, land: 10 } };
+const LAG = { t: 1, r: 1, tw: 1, yw: 1, pa: 1, fa1: 0.85, ba1: 0.8, fl1: 0.9, bl1: 0.88, fa2: 0.68, ba2: 0.64, fl2: 0.78, bl2: 0.74, wr: 0.75 };
 class Fighter {
   constructor(c, slot, battle) {
     this.c = c; this.s = tempoStats(c.stats); this.slot = slot; this.b = battle;
@@ -492,7 +544,7 @@ class Fighter {
   spawn(x, y, facing) {
     this.x = x; this.y = y; this.px = x; this.py = y;
     this.vx = 0; this.vy = 0; this.kbx = 0; this.kby = 0;
-    this.facing = facing; this.grounded = y >= 0;
+    this.facing = facing; this.grounded = y >= 0; this.plat = -1; this.groundY = 0; this.dropT = 0;
     this.jumps = this.s.airJumps; this.usedOnce = {};
     this.state = this.grounded ? 'idle' : 'air'; this.timer = 0;
     this.move = null; this.mf = 0; this.activeF = -1;
@@ -510,6 +562,29 @@ class Fighter {
     this.trail = []; this.trailJoint = null;
   }
   get alive() { return this.state !== 'dead'; }
+  // 回避中の無敵
+  dodgeInv() {
+    const d = this.state === 'spotdodge' ? DODGE.spot : this.state === 'roll' ? DODGE.roll : this.state === 'airdodge' ? DODGE.air : null;
+    return !!d && this.stateT >= d.inv[0] && this.stateT <= d.inv[1];
+  }
+  startDodge(kind, pad) {
+    this.move = null; this.charging = false; this.activeF = -1;
+    if (kind === 'spot') { this.state = 'spotdodge'; this.vx = 0; }
+    else if (kind === 'roll') {
+      this.state = 'roll'; this.rollDir = sign(pad.mx);
+      this.rollFrom = this.x;
+      this.facing = -this.rollDir; // 転がったあとは、来た方向（相手のいる方）を向く
+      this.vx = 0;
+    } else {
+      this.state = 'airdodge'; this.airDodged = true; this.ff = false;
+      const m = Math.hypot(pad.mx, pad.my);
+      if (m > 0.35) { this.vx = pad.mx / m * DODGE.air.speed; this.vy = -pad.my / m * DODGE.air.speed; this.adDir = true; }
+      else { this.vx *= 0.3; this.vy = Math.min(this.vy, 1); this.adDir = false; }
+    }
+    this.prevState = this.state; this.stateT = 0;
+    SFX.play('dodge');
+    return true;
+  }
   setAwake(on) {
     if (!this.cAwake || !!this.awake === on) return;
     this.awake = on;
@@ -520,6 +595,7 @@ class Fighter {
   }
   hittable() {
     if (!this.alive || this.invuln > 0 || this.state === 'grabbed') return false;
+    if (this.dodgeInv()) return false;
     if (this.activeWindow('invulnW')) return false;
     return true;
   }
@@ -536,6 +612,7 @@ class Fighter {
     if (this.invuln > 0) this.invuln--;
     if (this.flipT < 99) this.flipT++;
     if (this.ledgeCd > 0) this.ledgeCd--;
+    if (this.dropT > 0) this.dropT--;
     if (this.techT > 0) this.techT--;
     if (this.techLock > 0) this.techLock--;
     if (this.hitFlash > 0) this.hitFlash--;
@@ -553,14 +630,18 @@ class Fighter {
     const noPhys = this.state === 'grabbed' || this.state === 'ledge' || this.state === 'ledgeClimb' || this.ledgeRising();
     if (!noPhys) { this.physics(); this.tryLedge(); }
     if (this.state !== this.prevState) { this.prevState = this.state; this.stateT = 0; } else this.stateT++;
-    this.prevMy = pad.my;
+    this.prevMy = pad.my; this.prevMx = pad.mx;
     this.computePose();
   }
   runState(pad) {
     const s = this.s;
     switch (this.state) {
       case 'idle': case 'walk': case 'run':
-        if (!this.groundAct(pad)) this.groundMove(pad);
+        if (!this.groundAct(pad)) {
+          // すり抜け床の上でスティックを下にはじくと、下に降りる
+          if (this.plat >= 0 && pad.my < -0.75 && this.prevMy >= -0.75) { this.dropThrough(); break; }
+          this.groundMove(pad);
+        }
         break;
       case 'squat':
         this.vx = approach(this.vx, 0, 0.3);
@@ -589,8 +670,34 @@ class Fighter {
         if (pad.take('grab') || pad.take('A')) { this.startMove('grab', pad); break; }
         if (pad.take('B') && pad.my > 0.5) { this.startMove('uspecial', pad, 'B'); break; }
         if (pad.take('C') && pad.cdir.y > 0.5) { this.startMove('usmash', pad, 'C'); break; }
+        // 回避：シールド中にスティックを下 → その場回避／横 → 前後に転がる（はじいたとき、またはシールドを出した直後）
+        {
+          const fresh = this.stateT < 4;
+          if (pad.my < -0.7 && (fresh || this.prevMy >= -0.7)) { this.startDodge('spot', pad); break; }
+          if (Math.abs(pad.mx) > 0.7 && (fresh || Math.abs(this.prevMx || 0) <= 0.7)) { this.startDodge('roll', pad); break; }
+        }
         if (!pad.held.shield) { this.state = 'shieldOff'; this.timer = 7; }
         break;
+      case 'spotdodge':
+        this.vx = approach(this.vx, 0, PH.groundFriction);
+        if (this.stateT >= DODGE.spot.dur) this.state = 'idle';
+        break;
+      case 'roll': {
+        // 速く動き出して、最後はゆっくり止まる。ステージの端からは落ちない
+        const u = Math.min(1, (this.stateT + 1) / DODGE.roll.dur), e = 1 - Math.pow(1 - u, 2.2);
+        const pl = this.plat >= 0 && this.b.plats ? this.b.plats[this.plat] : null;
+        const lo = pl ? pl.x - pl.w / 2 + 4 : -ST.halfWidth + 6, hi = pl ? pl.x + pl.w / 2 - 4 : ST.halfWidth - 6;
+        const nx = clamp(this.rollFrom + this.rollDir * DODGE.roll.dist * e, lo, hi);
+        this.vx = 0; this.x = nx; this.vxSet = true;
+        if (this.stateT >= DODGE.roll.dur) this.state = 'idle';
+        break;
+      }
+      case 'airdodge': {
+        const t = this.stateT;
+        if (this.adDir) { const k = t < 6 ? 1 : Math.max(0, 1 - (t - 6) / 14); this.vx *= 0.9; this.vy *= 0.9; if (k === 0 && t === 20) { this.vx *= 0.5; } }
+        if (t >= DODGE.air.dur) this.state = 'air';
+        break;
+      }
       case 'shieldstun':
         this.vx = approach(this.vx, 0, PH.groundFriction);
         if (--this.timer <= 0) { this.state = pad.held.shield ? 'shield' : 'shieldOff'; this.timer = 4; }
@@ -624,9 +731,15 @@ class Fighter {
         break;
       case 'grabbed':
         break;
+      case 'victory':
+        this.vx = 0;
+        break;
     }
   }
   /* ---------- ジャンプ（小ジャンプ・大ジャンプ） ---------- */
+  dropThrough() {
+    this.grounded = false; this.plat = -1; this.dropT = 14; this.state = 'air'; this.vy = 1.5; this.ff = false;
+  }
   startJump() { this.state = 'squat'; this.timer = PH.jumpSquat; this.jumpPressT = 0; }
   takeoff(pad) {
     const s = this.s;
@@ -702,6 +815,7 @@ class Fighter {
     };
     if (pad.take('A')) return this.startMove(aerial(pad.mx, pad.my), pad);
     if (pad.take('C')) return this.startMove(aerial(pad.cdir.x, pad.cdir.y), pad);
+    if (pad.take('shield') && !this.airDodged) return this.startDodge('air', pad); // 空中回避（着地するまで1回）
     if (pad.take('B')) {
       const d = stickDir(pad.mx, pad.my);
       let k = { n: 'nspecialAir', up: 'uspecialAir', down: 'dspecialAir' }[d];
@@ -797,7 +911,7 @@ class Fighter {
       const tx = side * ST.halfWidth - side * 26;
       this.x = lerp(this.ledgeFrom[0], tx, easeOut(clamp((t - 0.5) * 2, 0, 1)));
       this.y = lerp(this.ledgeFrom[1], 0, easeOut(clamp(t * 1.6, 0, 1)));
-      if (f >= 15) { this.y = 0; this.grounded = true; this.vy = 0; }
+      if (f >= 15) { this.y = 0; this.grounded = true; this.vy = 0; this.plat = -1; this.groundY = 0; }
       if (f === 2) this.freeLedge();
     }
     if (m.events) for (const ev of m.events) {
@@ -851,7 +965,7 @@ class Fighter {
   }
   /* ---------- ダウン・起き上がり ---------- */
   knockDown() {
-    this.state = 'down'; this.downT = 0; this.grounded = true; this.y = 0; this.vy = 0; this.kby = 0;
+    this.state = 'down'; this.downT = 0; this.grounded = true; this.y = this.groundY || 0; this.vy = 0; this.kby = 0;
     this.kbx *= 0.5; this.move = null; this.ff = false;
     this.b.fx.dust(this.x, 0, 1.3);
   }
@@ -860,7 +974,7 @@ class Fighter {
   tryLedge() {
     if (this.ledgeCd > 0 || this.grounded) return;
     const upB = this.state === 'move' && this.move.helpless;
-    if (!(this.state === 'air' || this.state === 'helpless' || upB)) return;
+    if (!(this.state === 'air' || this.state === 'helpless' || this.state === 'airdodge' || upB)) return;
     if (this.vy + this.kby < -1 && !upB) return;
     for (const side of [-1, 1]) {
       const lx = side * ST.halfWidth, dx = (this.x - lx) * side;
@@ -914,7 +1028,7 @@ class Fighter {
     this.x = lerp(this.climbFrom[0], tx, easeOut(clamp((t - 8) / 14, 0, 1)));
     this.y = lerp(this.climbFrom[1], 0, easeOut(clamp(t / 12, 0, 1)));
     if (t === 3) this.freeLedge();
-    if (t >= T) { this.y = 0; this.grounded = true; this.state = 'idle'; this.ledgeGrabs = 0; }
+    if (t >= T) { this.y = 0; this.grounded = true; this.state = 'idle'; this.ledgeGrabs = 0; this.plat = -1; this.groundY = 0; }
   }
   /* ---------- つかみ・投げ ---------- */
   updateHolding(pad) {
@@ -945,7 +1059,8 @@ class Fighter {
     t.y = this.y - lerp(a[2], b[2], ease(u));
     t.heldR = a.length > 3 ? lerp(a[3], b[3], ease(u)) : 0;
     t.facing = m.faceAway ? this.facing : -this.facing;
-    if (t.y > -2 && Math.abs(t.x) <= ST.halfWidth) { t.y = 0; t.grounded = true; } else t.grounded = false;
+    if (this.grounded && this.plat >= 0 && t.y > this.y - 2) { t.y = this.y; t.grounded = true; t.plat = this.plat; t.groundY = this.y; }
+    else if (t.y > -2 && Math.abs(t.x) <= ST.halfWidth) { t.y = 0; t.grounded = true; t.plat = -1; t.groundY = 0; } else { t.grounded = false; t.plat = -1; }
   }
   releaseGrab(push) {
     const t = this.grabbed;
@@ -976,6 +1091,7 @@ class Fighter {
         if (m.gravityFrames && f >= m.gravityFrames[0] && f <= m.gravityFrames[1]) g = 0;
         else if (m.gravityMul !== undefined) g *= m.gravityMul;
       }
+      if (this.state === 'airdodge' && this.adDir && this.stateT < 20) g = 0;
       if (this.ff) this.vy = Math.max(this.vy, cap);
       if (this.vy < cap) this.vy = Math.min(this.vy + g, cap);
     }
@@ -990,10 +1106,29 @@ class Fighter {
   }
   collide() {
     const L = -ST.halfWidth, R = ST.halfWidth, T = 0, Bt = ST.thickness, hw = 12, hh = 80;
+    const plats = (this.b && this.b.plats) || [];
+    const FALL = ['idle', 'walk', 'run', 'land', 'shield', 'shieldOff', 'shieldstun', 'squat', 'down', 'getup', 'tech', 'spotdodge', 'roll'];
+    // すり抜け床（上に乗れる浮いた足場）
+    if (this.grounded && this.plat >= 0) {
+      const p = plats[this.plat];
+      if (!p || this.x < p.x - p.w / 2 || this.x > p.x + p.w / 2) {
+        this.grounded = false; this.plat = -1;
+        if (FALL.includes(this.state)) this.state = 'air';
+        if (this.state === 'holding') { this.releaseGrab(); this.state = 'air'; }
+      } else if (this.kby < -0.5 || this.vy < 0) { this.grounded = false; this.plat = -1; }
+      else { this.y = p.y; this.vy = 0; this.kby = 0; }
+      return;
+    }
+    if (!this.grounded && this.dropT <= 0 && this.vy + this.kby >= 0 && !(this.pad && this.pad.my < -0.75 && this.state !== 'tumble')) {
+      for (let i = 0; i < plats.length; i++) {
+        const p = plats[i];
+        if (this.py <= p.y + 0.5 && this.y >= p.y && this.x >= p.x - p.w / 2 && this.x <= p.x + p.w / 2) { this.land(p.y, i); return; }
+      }
+    }
     if (this.grounded) {
       if (this.x < L || this.x > R) {
         this.grounded = false;
-        if (['idle', 'walk', 'run', 'land', 'shield', 'shieldOff', 'shieldstun', 'squat', 'down', 'getup', 'tech'].includes(this.state)) this.state = 'air';
+        if (FALL.includes(this.state)) this.state = 'air';
         if (this.state === 'holding') { this.releaseGrab(); this.state = 'air'; }
       } else if (this.kby < -0.5 || this.vy < 0) {
         this.grounded = false;
@@ -1017,9 +1152,9 @@ class Fighter {
       this.x = R + hw; if (this.kbx < 0) this.kbx = -this.kbx * 0.5; if (this.vx < 0) this.vx = 0;
     }
   }
-  land() {
+  land(gy = 0, pi = -1) {
     const speedDown = this.vy + this.kby;
-    this.y = 0;
+    this.y = gy; this.groundY = gy; this.plat = pi;
     const stun = this.state === 'tumble' || (this.state === 'hitstun' && this.hurtKind !== 'hurtLight');
     if (stun && this.techT > 0) { // 受け身
       this.grounded = true; this.vy = this.kby = 0; this.kbx = 0; this.vx = 0;
@@ -1034,12 +1169,19 @@ class Fighter {
       this.b.fx.dust(this.x, 0, 1.4);
       return;
     }
-    this.grounded = true; this.jumps = this.s.airJumps; this.usedOnce = {}; this.ledgeGrabs = 0;
+    this.grounded = true; this.jumps = this.s.airJumps; this.usedOnce = {}; this.ledgeGrabs = 0; this.airDodged = false;
     this.vy = 0; this.kby = 0; this.ff = false; this.shCheck = false;
     this.landSquash = 6;
+    // 着地の衝撃：重いほど、速く落ちたほど、膝が深く沈む
+    const imp = clamp(speedDown, 0, 16) * Math.pow((this.s.weight || 100) / 100, 0.5);
+    this.dvel.fl2 -= imp * 2.4; this.dvel.bl2 -= imp * 2.4; this.dvel.fl1 += imp * 1.3; this.dvel.bl1 += imp * 0.5;
+    this.dvel.t += imp * 1.3; this.dvel.fa1 -= imp * 1.2; this.dvel.ba1 -= imp * 1.2;
+    if (imp > 9) this.b.shake = Math.max(this.b.shake, (imp - 9) * 0.35);
+    if (imp > 4) SFX.play('land', clamp((imp - 4) / 12, 0, 1));
     switch (this.state) {
       case 'air': this.state = 'land'; this.timer = landLagT(4); break;
       case 'helpless': this.state = 'land'; this.timer = landLagT(20); break;
+      case 'airdodge': this.state = 'land'; this.timer = landLagT(this.adDir ? DODGE.air.land : 3); this.vx *= 0.4; break;
       case 'move':
         if (this.moveAir) {
           const m = this.move;
@@ -1073,7 +1215,7 @@ class Fighter {
         break;
       }
       case 'idle':
-        target = lerpPose(P0.idle, P0.idle2, (Math.sin(this.anim * 0.07) + 1) / 2);
+        target = lerpPose(P0['idle_' + this.c.weapon] || P0.idle, P0['idle2_' + this.c.weapon] || P0.idle2, (Math.sin(this.anim * 0.07) + 1) / 2);
         if (this.landSquash > 0) target = lerpPose(target, P0.crouch, this.landSquash / 8);
         sp = SPRING.soft; break;
       case 'walk': case 'run': {
@@ -1086,7 +1228,8 @@ class Fighter {
         if (this.skidT > 0) target = lerpPose(target, P0.skid, 0.7);
         break;
       }
-      case 'squat': case 'land': case 'shieldOff': case 'tech': target = P0.crouch; sp = SPRING.snap; break;
+      case 'squat': case 'shieldOff': case 'tech': target = P0.crouch; sp = SPRING.snap; break;
+      case 'land': target = P0.crouch; sp = SPRING.land; break;
       case 'getup': target = this.timer > 12 ? P0.crouch : P0.idle; sp = SPRING.loco; break;
       case 'air': {
         const vy = this.vy;
@@ -1096,10 +1239,43 @@ class Fighter {
         else target = lerpPose(P0.tuck, P0.fall, clamp((vy - 0) / 6, 0, 1));
         target = copyPose(target);
         if (this.flipT < 24) { target = copyPose(lerpPose(target, P0.tuck, Math.sin(Math.PI * this.flipT / 24) * 0.9)); target.r = 360 * ease(this.flipT / 24); }
+        // 空中で横に動いている向きへ、体を少し傾ける（後ろへ下がるときは反る）
+        target.t += clamp(this.vx * this.facing * 1.6, -9, 9);
         sp = SPRING.air; break;
       }
       case 'helpless': target = copyPose(P0.helpless); target.t = Math.sin(this.anim * 0.15) * 8; sp = SPRING.air; break;
       case 'shield': case 'shieldstun': target = P0.shield; sp = SPRING.snap; break;
+      case 'victory': {
+        // 勝利ポーズ（キャラごと）
+        const k = VICTORY[this.c.id] || VICTORY.default, t = this.stateT;
+        let pose = POSES[k[k.length - 1][1]];
+        for (let i = 0; i < k.length - 1; i++) if (t >= k[i][0] && t < k[i + 1][0]) { pose = lerpPose(POSES[k[i][1]], POSES[k[i + 1][1]], ease((t - k[i][0]) / (k[i + 1][0] - k[i][0]))); break; }
+        target = copyPose(pose);
+        target.t += Math.sin(this.anim * 0.06) * 1.5;
+        target.yw = -40 * this.facing * clamp(t / 30, 0, 1); // 少しカメラの方を向く
+        sp = SPRING.soft; break;
+      }
+      case 'spotdodge': {
+        // その場回避：画面の奥へ一歩引いて、体をひねってかわす
+        const u = this.stateT / DODGE.spot.dur;
+        target = copyPose(lerpPose(P0.crouch, P0.dodgeSpot, Math.sin(Math.PI * Math.min(1, u * 1.3))));
+        sp = SPRING.snap; break;
+      }
+      case 'roll': {
+        // 前後回避：低く転がる
+        const u = this.stateT / DODGE.roll.dur;
+        target = copyPose(u < 0.75 ? P0.tuck : lerpPose(P0.tuck, P0.crouch, (u - 0.75) / 0.25));
+        target.r = 360 * ease(Math.min(1, u / 0.75)) * (this.rollDir === this.facing ? 1 : -1) * -1;
+        if (this.stateT < 3) { this.disp.r = 0; this.prevDisp.r = 0; }
+        target.pa = 0;
+        sp = SPRING.snap; break;
+      }
+      case 'airdodge': {
+        const u = this.stateT / DODGE.air.dur;
+        target = copyPose(lerpPose(P0.dodgeAir, P0.fall, clamp((u - 0.5) * 2, 0, 1)));
+        target.yw = this.adDir ? 0 : 360 * ease(Math.min(1, u * 1.6));
+        sp = SPRING.snap; break;
+      }
       case 'hitstun': target = P0[this.hurtKind] || P0.hurt; sp = SPRING.hurt; break;
       case 'tumble': target = copyPose(P0.tumble); target.r = this.disp.r - 20; sp = SPRING.hurt; break;
       case 'down': target = P0.down; sp = SPRING.hurt; break;
@@ -1113,15 +1289,31 @@ class Fighter {
       case 'ledgeClimb': target = this.timer < 12 ? P0.ledgeClimb : P0.crouch; sp = SPRING.loco; break;
       default: target = P0.idle;
     }
+    // 回避のとき、画面の奥・手前に一歩ずれる（見た目だけ）
+    { const st = this.state; let dz = 0;
+      if (st === 'spotdodge') dz = -38 * Math.sin(Math.PI * Math.min(1, this.stateT / DODGE.spot.dur));
+      else if (st === 'roll') dz = 22 * Math.sin(Math.PI * Math.min(1, this.stateT / DODGE.roll.dur));
+      this.prevDepth = this.depthZ || 0; this.depthZ = lerp(this.depthZ || 0, dz, 0.5); }
     // 回転の数値が大きく飛ぶとき（360度回った後など）は、近い向きにそろえる
     for (const key of ['r', 'yw', 'wr']) {
       const dr = target[key] - this.disp[key];
       if (Math.abs(dr) > 180) { const n = Math.round(dr / 360) * 360; this.disp[key] += n; this.prevDisp[key] += n; }
     }
-    const k = sp[0], dmp = sp[1];
+    let k = sp[0], dmp = sp[1];
+    // 攻撃のリズム：ため（じわっと）→ 当たる瞬間（一気に）→ 当てたあと（体が流れて、重く戻る）
+    if (this.state === 'move' && this.move.hits && this.move.hits.length && this.activeF >= 0) {
+      const m = this.move, f = this.activeF;
+      if (f < m.firstHit - 1) k *= 0.8;
+      else if (f <= m.lastHit + 1) { k = Math.max(k, 0.82); dmp = 0.22; }
+      else { k *= 0.4; dmp = 0.7; }
+    }
+    // 重いキャラほど、ゆっくり大きく動く（歩き・走りのくり返しの動きには使わない）
+    const loco = this.state === 'walk' || this.state === 'run' || this.state === 'idle';
+    if (!loco) k = Math.min(0.9, k / Math.pow((this.s.weight || 100) / 100, 0.35));
     for (let i = 0; i < PK.length; i++) {
       const key = PK[i];
-      const v = this.dvel[key] * dmp + (target[key] - this.disp[key]) * k;
+      const kk = loco ? k : k * (LAG[key] || 1);
+      const v = this.dvel[key] * dmp + (target[key] - this.disp[key]) * kk;
       this.dvel[key] = v; this.disp[key] += v;
     }
     // 手の位置（武器と軌跡の描画用）
@@ -1271,7 +1463,7 @@ class FX {
   dust(x, y, s) { for (let i = 0; i < 4; i++) this.add({ k: 'dust', x: x + (rnd() - 0.5) * 30 * s, y: y - 4, vx: (rnd() - 0.5) * 3 * s, vy: -rnd() * 1.5, life: 22, size: 6 + rnd() * 6 * s }); }
   ring(x, y, color, size) { this.add({ k: 'ring', x, y, color, life: 18, size }); }
   smoke(x, y) { this.add({ k: 'smoke', x, y, life: 26, size: 7 + rnd() * 5 }); }
-  ko(x, y, color) { this.add({ k: 'ko', x, y, color, life: 50 }); }
+  ko(x, y, color) { this.add({ k: 'ko', x, y, color, life: 64, rays: Array.from({ length: 14 }, () => [rnd() * 1.4 - 0.7, 0.5 + rnd() * 0.8]) }); }
   meteor(x, y) { this.add({ k: 'meteor', x, y, life: 26 }); this.ring(x, y, '#ffb13b', 70); }
   update() {
     for (const e of this.list) {
@@ -1409,7 +1601,17 @@ class CpuBrain {
     if (me.grounded && opAttacking && adx < 150 && Math.abs(dy) < 100) {
       const counterer = this.style === 'counter' || (me.c.cpu && me.c.cpu.counter);
       if (counterer && rnd() < (this.style === 'counter' ? 0.45 : 0.28)) { if (this.face(dir)) { p.my = -1; p.press('B'); } return; }
+      // 回避：その場回避か、相手から離れる方向へ転がる（端に追いつめられていたら相手の向こう側へ）
+      if (rnd() < cfg.shieldChance * 0.6) {
+        p.held.shield = true; this.plan = { type: 'shield', t: 2 };
+        if (rnd() < 0.5) p.my = -1;
+        else { const away = -dir, edge = Math.abs(me.x + away * 120) > ST.halfWidth - 10; p.mx = edge ? dir : away; }
+        return;
+      }
       if (rnd() < cfg.shieldChance) { this.plan = { type: 'shield', t: 12 + ((rnd() * 14) | 0) }; return; }
+    }
+    if (!me.grounded && me.state === 'air' && !me.airDodged && opAttacking && adx < 120 && Math.abs(dy) < 110 && rnd() < cfg.shieldChance * 0.5) {
+      p.mx = -dir * 0.8; p.press('shield'); return;
     }
     // 飛び道具を跳ね返す
     const reflector = this.style === 'counter' || (me.c.cpu && me.c.cpu.reflect);
@@ -1527,6 +1729,7 @@ class Battle {
     this.frame = 0; this.shake = 0; this.flash = 0;
     this.cine = null; this.cineCd = 0; this.slowPhase = 0; this.awaken = null;
     this.over = false; this.overT = 0; this.winner = null;
+    this.phase = 'ready'; this.phaseT = 0; this.plats = []; // ready（3・2・1・GO!）→ fight → （決着）→ victory
     this.cam = { x: 0, y: -150, z: 1 }; this.prevCam = { ...this.cam };
     this.camInit = false;
   }
@@ -1544,7 +1747,15 @@ class Battle {
     this.slowPhase = 0;
     this.frame++;
     this.prevCam = { ...this.cam };
-    this.cpu.step();
+    // 試合開始のカウントダウン：3・2・1 の間は動けない
+    if (this.phase === 'ready') {
+      this.phaseT++;
+      for (const f of this.f) f.pad.clear();
+      if (this.phaseT === 1 || this.phaseT === 51 || this.phaseT === 101) SFX.play('count');
+      if (this.phaseT >= 150) { this.phase = 'fight'; this.goAt = this.frame; SFX.play('go'); }
+    } else this.cpu.step();
+    // 決着後：勝った方の勝利ポーズ
+    if (this.over && this.overT === 110 && this.winner) this.startVictory(this.winner);
     for (const f of this.f) f.update();
     for (const f of this.f) {
       if (f.state === 'holding' && f.grabbed && f.hitlag <= 0) {
@@ -1666,12 +1877,12 @@ class Battle {
     if (base.type === 'wave') SFX.play('slash');
     if (base.type === 'mine') {
       // 地雷：足元の前に置く（空中なら真下に落ちる）
-      Object.assign(o, { x: owner.x + (ev.x || 0) * owner.facing, y: owner.grounded ? 0 : owner.y, vx: 0, vy: 0, onGround: owner.grounded });
+      Object.assign(o, { x: owner.x + (ev.x || 0) * owner.facing, y: owner.grounded ? (owner.groundY || 0) : owner.y, vx: 0, vy: 0, onGround: owner.grounded });
       this.projectiles.push(new Projectile(o));
       return;
     }
     if (base.type === 'shock') {
-      if (!owner.grounded && owner.y < -2) return;
+      if ((!owner.grounded && owner.y < -2) || owner.plat >= 0) return;
       const d = (ev.dir || 1) * owner.facing;
       Object.assign(o, { x: owner.x + d * 30, y: 0, vx: d * speed, vy: 0 });
     } else {
@@ -1854,6 +2065,10 @@ class Battle {
     d.usedOnce = {};
     d.facing = isProj ? -dir : sign(a.x - d.x) || d.facing; // くらった側は攻撃の方を向く
     d.hitFlash = 4; d.heldR = 0;
+    // 当たった衝撃で、体がガクッと折れる（強いほど大きく）
+    const jolt = clamp(kb / 40, 0.4, 4) * (hb.react === 'light' ? 0.5 : 1);
+    const high = wy < d.y - 70 * (d.look.scale || 1); // 顔のあたりに当たったら上体がのけぞる、低いところなら体が折れる
+    d.dvel.t += (high ? -9 : 6) * jolt; d.dvel.fa1 -= 8 * jolt; d.dvel.ba1 -= 6 * jolt; d.dvel.fl2 -= 4 * jolt;
     let hl = Math.min(22, Math.floor(dmg * PH.hitlagMul + PH.hitlagBase) + (kb > 150 ? 4 : 0));
     if (isMeteor) hl = Math.min(26, hl + 5);
     d.hitlag = hl; d.shakeT = hl;
@@ -1871,6 +2086,7 @@ class Battle {
     this.fx.spark(wx, wy, kb, hb.elec ? '#7fe3ff' : kb > 150 ? '#ffd34d' : '#ffffff');
     if (hb.elec) { this.fx.ring(wx, wy, '#7fe3ff', 46); SFX.play('zap'); }
     if (kb > 110) this.shake = Math.max(this.shake, Math.min(14, (kb - 100) * 0.07));
+    else if (kb > 45) this.shake = Math.max(this.shake, 1.2 + (kb - 45) * 0.02); // 軽い攻撃でも小さく揺れて手ごたえを出す
     if (kb > 170) this.flash = Math.max(this.flash, 3);
     SFX.play(kb < 60 ? 'hitL' : kb < 130 ? 'hitM' : 'hitH');
     if (isMeteor) { this.fx.meteor(wx, wy); this.shake = Math.max(this.shake, 8); SFX.play('meteor'); }
@@ -1913,15 +2129,34 @@ class Battle {
         const cx = clamp(f.x, z.left, z.right), cy = clamp(f.y, z.top, z.bottom);
         this.fx.ko(cx, cy, f.color);
         this.shake = 16; this.flash = 6;
-        SFX.play('ko');
+        SFX.play('ko'); SFX.play('blast');
         if (f.grabbed) f.releaseGrab();
         f.freeLedge();
         f.stocks--; f.state = 'dead'; f.timer = 70; f.move = null; f.kbx = f.kby = f.vx = f.vy = 0; f.trail = [];
-        if (f.stocks <= 0 && !this.over) { this.over = true; this.winner = this.other(f); }
+        if (f.stocks <= 0 && !this.over) {
+          this.over = true; this.winner = this.other(f);
+          SFX.play('game'); this.flash = Math.max(this.flash, 6);
+          if (window.Music) window.Music.stop();
+        }
       }
     }
   }
+  startVictory(w) {
+    this.phase = 'victory';
+    w.move = null; w.charging = false; w.grabbed = null; w.kbx = w.kby = w.vx = w.vy = 0;
+    w.x = clamp(w.x, -ST.halfWidth + 80, ST.halfWidth - 80); w.y = 0; w.grounded = true; w.plat = -1; w.groundY = 0;
+    w.state = 'victory'; w.stateT = 0; w.prevState = 'victory'; w.facing = w.x > 0 ? -1 : 1; w.invuln = 0;
+    this.projectiles = [];
+    if (window.Music) window.Music.play('victory');
+  }
   updateCamera() {
+    // 勝利ポーズ：勝った方に寄る（右側に結果の表示を出すので、少し左に映す）
+    if (this.phase === 'victory' && this.winner) {
+      const w = this.winner, sc = w.look.scale || 1;
+      const tz = clamp((view.h || 390) / (165 * sc), 1.5, 4), tx = w.x + (view.w || 800) * 0.2 / tz, ty = w.y - 62 * sc;
+      this.cam.x = lerp(this.cam.x, tx, 0.06); this.cam.y = lerp(this.cam.y, ty, 0.06); this.cam.z = lerp(this.cam.z, tz, 0.05);
+      return;
+    }
     const alive = this.f.filter(f => f.alive);
     let minX = -260, maxX = 260, minY = -200, maxY = 30;
     if (alive.length) {
@@ -1932,7 +2167,7 @@ class Battle {
     const C = D.camera || { minWidth: 600, padX: 360, minHeight: 300, padY: 260, centerPull: 0.12, zoomIn: 0.04, zoomOut: 0.1 };
     let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     const spread = maxX - minX;
-    cx = lerp(cx, 0, C.centerPull + clamp(spread / 2000, 0, 0.2)); cy = lerp(cy, -90, 0.25);
+    cx = lerp(cx, 0, C.centerPull + clamp(spread / 2000, 0, 0.2)); cy = lerp(cy, -40, 0.35);
     const vw = view.w || 800, vh = view.h || 400;
     const needW = Math.max(spread + C.padX, C.minWidth), needH = Math.max(maxY - minY + C.padY, C.minHeight);
     const z = clamp(Math.min(vw / needW, vh / needH), 0.22, 3);
@@ -2201,7 +2436,7 @@ function render(b, alpha) {
       ctx.fillStyle = `rgba(255,255,255,${s.a})`;
       ctx.fillRect((s.x - cam.x * 0.15) * 0.5 + W / 2, (s.y - cam.y * 0.15) * 0.5 + H / 2, s.s, s.s);
     }
-    drawStage(X, Y, z);
+    drawStage(X, Y, z); drawPlats(b, X, Y, z);
     for (const p of b.projectiles) drawProjectile(p, alpha, X, Y, z);
     for (const f of b.f) drawFighter(f, alpha, X, Y, z);
   }
@@ -2211,9 +2446,9 @@ function render(b, alpha) {
   if (DEBUG) drawDebug(b, X, Y, z);
   if (cw > 0) drawCine(b, X, Y, z, cw, tick);
   if (b.awaken) drawAwaken(b, X, Y, z, tick);
+  drawMatchText(b, tick);
   if (b.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.05})`; ctx.fillRect(0, 0, W, H); }
-  drawHUD(b);
-  drawControls();
+  if (b.phase !== 'victory') { drawHUD(b); drawControls(); }
 }
 // 強烈な一撃の演出の強さ（0〜1）：すっと寄って、最後にゆっくり戻る
 function cineWeight(b, tick) {
@@ -2254,6 +2489,28 @@ function drawCine(b, X, Y, z, w, tick) {
   const bar = H * 0.07 * w;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
 }
+// 「3・2・1・GO!」と「GAME!」の大きな文字
+function drawMatchText(b, tick) {
+  let text = null, u = 0, col = '#ffffff', size = 1;
+  if (b.phase === 'ready') {
+    const t = b.phaseT + tick, n = 3 - Math.floor(t / 50);
+    if (n >= 1) { text = String(n); u = (t % 50) / 50; col = ['#5ad1ff', '#ffd54a', '#ff6a6a'][n - 1]; }
+  } else if (b.goAt !== undefined && b.frame - b.goAt < 45 && !b.over) { text = 'GO!'; u = (b.frame - b.goAt + tick) / 45; col = '#ffd54a'; size = 1.25; }
+  if (b.over && b.overT < 105) { text = 'GAME!'; u = Math.min(1, (b.overT + tick) / 105); col = '#ffffff'; size = 1.3; }
+  if (!text) return;
+  const W = view.w, H = view.h;
+  const pop = u < 0.15 ? 0.6 + (u / 0.15) * 0.55 : u < 0.25 ? 1.15 - (u - 0.15) * 1.5 : 1;
+  const a = u > 0.8 ? 1 - (u - 0.8) / 0.2 : 1;
+  const fs = Math.min(W, H) * 0.28 * size * pop;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.translate(W / 2, H * 0.42); ctx.rotate(-0.06);
+  ctx.font = `900 ${fs}px "Arial Black", "Hiragino Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round'; ctx.lineWidth = fs * 0.12; ctx.strokeStyle = '#141a3a'; ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = col; ctx.fillText(text, 0, 0);
+  ctx.lineWidth = fs * 0.03; ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.strokeText(text, 0, 0);
+  ctx.restore();
+}
 // 覚醒の演出：まわりを暗くして、映画のような帯と光の粒
 function drawAwaken(b, X, Y, z, tick) {
   const a = b.awaken, f = a.f, W = view.w, H = view.h, t = a.t + tick, END = 78;
@@ -2277,6 +2534,10 @@ function drawAwaken(b, X, Y, z, tick) {
   }
   const bar = H * 0.1 * w;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+}
+function drawPlats(b, X, Y, z) {
+  ctx.fillStyle = '#8a92d8';
+  for (const p of b.plats || []) { ctx.fillRect(X(p.x - p.w / 2), Y(p.y), p.w * z, 6 * z); }
 }
 function drawStage(X, Y, z) {
   const L = -ST.halfWidth, R = ST.halfWidth, T = 0, Bt = ST.thickness;
@@ -2307,7 +2568,9 @@ function fighterLook(f) {
   }
   else if (f.charging && Math.floor(f.anim / 3) % 2 === 0) { col = '#ffffff'; dark = '#dddddd'; }
   else if (f.state === 'dizzy' && Math.floor(f.anim / 6) % 2 === 0) col = '#ffe066';
-  return { col, dark };
+  const dodge = f.dodgeInv && f.dodgeInv();
+  if (dodge && f.hitFlash <= 0) { col = mixHex(col, '#d8ecff', 0.45); dark = mixHex(dark, '#b8d4f0', 0.45); }
+  return { col, dark, dodge };
 }
 function interpPose(f, alpha) { return lerpPose(f.prevDisp, f.disp, alpha); }
 function drawFighter(f, alpha, X, Y, z) {
@@ -2481,19 +2744,28 @@ function drawFX(fx, X, Y, z) {
       ctx.strokeStyle = '#fff3c4'; ctx.lineWidth = Math.max(1.5, 3 * z);
       for (const dx of [-18, 0, 18]) { ctx.beginPath(); ctx.moveTo(x + dx * z, y - 10 * z); ctx.lineTo(x + dx * 1.6 * z, y + L * 0.8); ctx.stroke(); }
     } else if (e.k === 'ko') {
-      ctx.globalAlpha = 1 - u;
+      // 撃墜：画面のふちから中央へ、光の柱がはしる
       const x = X(e.x), y = Y(e.y), cx = view.w / 2, cy = view.h / 2;
-      const a = Math.atan2(cy - y, cx - x), len = Math.max(view.w, view.h) * (0.5 + u);
-      const wdt = 60 * (1 - u) + 10;
-      ctx.fillStyle = e.color;
-      ctx.beginPath();
-      ctx.moveTo(x - Math.sin(a) * wdt * 0.2, y + Math.cos(a) * wdt * 0.2);
-      ctx.lineTo(x + Math.cos(a) * len - Math.sin(a) * wdt, y + Math.sin(a) * len + Math.cos(a) * wdt);
-      ctx.lineTo(x + Math.cos(a) * len + Math.sin(a) * wdt, y + Math.sin(a) * len - Math.cos(a) * wdt);
-      ctx.lineTo(x + Math.sin(a) * wdt * 0.2, y - Math.cos(a) * wdt * 0.2);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(x, y, 40 * (1 - u) + 6, 0, Math.PI * 2); ctx.fill();
+      const a = Math.atan2(cy - y, cx - x), len = Math.max(view.w, view.h) * (0.6 + u * 0.8);
+      const beam = (wd, col, al) => {
+        ctx.globalAlpha = al; ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(x - Math.sin(a) * wd * 0.15, y + Math.cos(a) * wd * 0.15);
+        ctx.lineTo(x + Math.cos(a) * len - Math.sin(a) * wd, y + Math.sin(a) * len + Math.cos(a) * wd);
+        ctx.lineTo(x + Math.cos(a) * len + Math.sin(a) * wd, y + Math.sin(a) * len - Math.cos(a) * wd);
+        ctx.lineTo(x + Math.sin(a) * wd * 0.15, y - Math.cos(a) * wd * 0.15);
+        ctx.closePath(); ctx.fill();
+      };
+      const k = 1 - u;
+      beam(110 * k + 16, e.color, 0.45 * k);
+      beam(55 * k + 8, e.color, 0.9 * k);
+      beam(18 * k + 3, '#ffffff', k);
+      // 飛び散る光の線
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = k;
+      for (const r of e.rays) { const aa = a + r[0], l0 = 30 + u * 300 * r[1], l1 = l0 + 60 * r[1]; ctx.beginPath(); ctx.moveTo(x + Math.cos(aa) * l0, y + Math.sin(aa) * l0); ctx.lineTo(x + Math.cos(aa) * l1, y + Math.sin(aa) * l1); ctx.stroke(); }
+      ctx.globalAlpha = Math.min(1, k * 1.5); ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, 60 * k + 6, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = e.color; ctx.lineWidth = 6 * k + 1;
+      ctx.beginPath(); ctx.arc(x, y, 30 + u * 160, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
@@ -2514,9 +2786,24 @@ function drawDebug(b, X, Y, z) {
 }
 // 上の％表示（数字が変わったときだけ描き直す）
 const hudCache = new Map();
+const faceImg = {};
+function face(c) {
+  if (!c.portrait) return null;
+  let im = faceImg[c.id];
+  if (!im) { im = faceImg[c.id] = new Image(); im.src = c.portrait; im.onload = () => hudCache.clear(); }
+  return im.complete && im.naturalWidth ? im : null;
+}
+function circleImg(g, im, x, y, r, ring) {
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.closePath();
+  g.fillStyle = '#d9d9de'; g.fill(); g.clip();
+  if (im) g.drawImage(im, x - r, y - r * 0.92, r * 2, r * 2);
+  g.restore();
+  if (ring) { g.strokeStyle = ring; g.lineWidth = Math.max(1.5, r * 0.14); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
+}
 function hudPanel(f) {
   const pc = f.alive ? Math.floor(f.percent) : 0;
-  const key = `${f.slot}|${pc}|${f.stocks}|${f.c.name}|${view.dpr}`;
+  const im = face(f.c);
+  const key = `${f.slot}|${pc}|${f.stocks}|${f.c.name}|${view.dpr}|${!!im}|${!!f.outfit2}`;
   let c = hudCache.get(f.slot);
   if (c && c.key === key) return c.canvas;
   const w = 150, h = 50, dpr = view.dpr;
@@ -2527,12 +2814,14 @@ function hudPanel(f) {
   g.clearRect(0, 0, w, h);
   g.fillStyle = 'rgba(8,12,30,0.62)'; rr(g, 0, 0, w, h, 10); g.fill();
   g.fillStyle = f.color; g.fillRect(0, 8, 4, 34);
-  g.textAlign = 'left'; g.font = 'bold 11px -apple-system, "Hiragino Sans", sans-serif';
-  g.fillStyle = '#c9cff0'; g.fillText(`${f.label}：${f.c.name}`, 12, 16);
-  for (let s = 0; s < f.stocks; s++) { g.fillStyle = f.color; g.beginPath(); g.arc(16 + s * 13, 36, 4.5, 0, Math.PI * 2); g.fill(); }
+  // 顔とストック（残り人数ぶんの小さな顔）
+  circleImg(g, im, 25, 24, 16, f.color);
+  g.textAlign = 'left'; g.font = 'bold 10px -apple-system, "Hiragino Sans", sans-serif';
+  g.fillStyle = '#c9cff0'; g.fillText(`${f.label}：${f.c.name}`, 46, 14);
+  for (let s2 = 0; s2 < f.stocks; s2++) circleImg(g, im, 52 + s2 * 13, 37, 5.5, 'rgba(255,255,255,0.7)');
   g.textAlign = 'right'; g.font = 'bold 26px -apple-system, "Hiragino Sans", sans-serif';
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillText(`${pc}%`, w - 9, 44);
-  g.fillStyle = pctColor(pc); g.fillText(`${pc}%`, w - 10, 43);
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillText(`${pc}%`, w - 7, 45);
+  g.fillStyle = pctColor(pc); g.fillText(`${pc}%`, w - 8, 44);
   hudCache.set(f.slot, { key, canvas: cv });
   return cv;
 }
@@ -2588,10 +2877,11 @@ function drawControls() {
 const $ = id => document.getElementById(id);
 const state = {
   screen: 'title', battle: null, paused: false, p1: 0, cpu: 1,
-  showFps: store.get('showFps', false), mode: '3d', level: store.get('cpuLevel', D.cpu.default),
+  showFps: store.get('showFps', false), mode: '3d', level: store.get('cpuLevel', D.cpu.default), stage: store.get('stage', 0),
 };
 function show(id) {
   for (const s of ['title', 'select', 'pause', 'result']) $(s).classList.toggle('show', s === id);
+  if ((id === 'title' || id === 'select') && window.Music) window.Music.play('menu');
 }
 function buildCards() {
   // 1つの画面から選ぶ：上の「あなた」「CPU」で、どちらのキャラを選ぶか切りかえる
@@ -2618,6 +2908,19 @@ function buildCards() {
     });
     el.appendChild(d);
   });
+  // ステージ選び（ランダムもあり）
+  const sg = $('stages');
+  if (sg && D.stages) {
+    sg.innerHTML = '';
+    const opts = D.stages.map((st, i) => ({ i, st })).concat([{ i: -1 }]);
+    for (const o of opts) {
+      const d = document.createElement('div');
+      d.className = 'st' + (state.stage === o.i ? ' on' : '') + (o.i < 0 ? ' rand' : '');
+      d.innerHTML = o.i < 0 ? 'ランダム' : `<img src="${o.st.thumb}" alt=""><b>${o.st.name}</b>`;
+      d.addEventListener('click', () => { state.stage = o.i; store.set('stage', o.i); buildCards(); });
+      sg.appendChild(d);
+    }
+  }
   const lv = $('cpuLevel');
   lv.innerHTML = '';
   for (const k in D.cpu.levels) {
@@ -2629,7 +2932,15 @@ function buildCards() {
   }
 }
 function startBattle() {
+  const ns = (D.stages || []).length;
+  const si = state.stage >= 0 && state.stage < ns ? state.stage : Math.floor(Math.random() * ns);
   state.battle = new Battle(D.characters[state.p1], D.characters[state.cpu], state.level);
+  state.battle.stage = D.stages ? D.stages[si] : null;
+  // すり抜け床：data.js の h は床からの高さ（上がプラス）→ ゲームの座標（上がマイナス）に
+  state.battle.plats = ((state.battle.stage && state.battle.stage.platforms) || []).map(p => ({ x: p.x, y: -p.h, w: p.w }));
+  if (window.Music) window.Music.play(state.battle.stage ? state.battle.stage.bgm : 'temple');
+  SFX.duck(false);
+  if (state.battle.stage && window.Render3D && window.Render3D.ready) window.Render3D.setStage(state.battle.stage.id);
   controls.reset();
   controls.pad = state.battle.f[0].pad;
   state.paused = false; state.screen = 'battle'; state.resultShown = false;
@@ -2638,11 +2949,12 @@ function startBattle() {
 }
 function pause() {
   if (state.screen !== 'battle' || state.paused || !state.battle || state.battle.over) return;
-  state.paused = true; controls.reset(); show('pause');
+  state.paused = true; controls.reset(); show('pause'); SFX.duck(true);
 }
 controls.onPause = pause;
 function updateMenuLabels() {
   $('btnFps').textContent = `fps表示：${state.showFps ? 'オン' : 'オフ'}`;
+  $('btnBgm').textContent = `BGM：${SFX.musicOn ? 'オン' : 'オフ'}`;
 }
 // 3D表示の準備（もしこの端末で3Dが使えないときだけ、平面の表示で動かす）
 function init3D() {
@@ -2654,7 +2966,8 @@ function init3D() {
 $('btnStart').addEventListener('click', () => { state.picking = 'p1'; buildCards(); show('select'); state.screen = 'select'; });
 $('btnBack').addEventListener('click', () => { show('title'); state.screen = 'title'; });
 $('btnFight').addEventListener('click', startBattle);
-$('btnResume').addEventListener('click', () => { state.paused = false; show(null); acc = 0; });
+$('btnResume').addEventListener('click', () => { state.paused = false; show(null); acc = 0; SFX.duck(false); });
+$('btnBgm').addEventListener('click', () => { SFX.setMusic(!SFX.musicOn); updateMenuLabels(); });
 $('btnRestart').addEventListener('click', startBattle);
 $('btnToSelect').addEventListener('click', () => { state.battle = null; state.screen = 'select'; buildCards(); show('select'); });
 $('btnFps').addEventListener('click', () => { state.showFps = !state.showFps; store.set('showFps', state.showFps); updateMenuLabels(); });
@@ -2684,9 +2997,12 @@ function frame(now) {
     let n = 0;
     while (acc >= STEP && n < 4) { b.step(); acc -= STEP; n++; }
     if (n === 4) acc = 0;
-    if (b.over && b.overT > 100 && !state.resultShown) {
+    if (b.over && b.overT > 170 && !state.resultShown) {
       state.resultShown = true;
-      $('resultText').textContent = b.winner.slot === 0 ? 'あなたの勝ち！' : 'CPUの勝ち…';
+      const w = b.winner;
+      $('resultText').textContent = w.slot === 0 ? 'あなたの勝ち！' : 'CPUの勝ち…';
+      $('resultName').textContent = w.c.name;
+      $('resultFace').src = w.c.portrait || '';
       show('result');
     }
   }

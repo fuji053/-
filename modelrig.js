@@ -26,6 +26,7 @@ const B = {
   hips: 'Hips', spine0: 'Spine02', spine1: 'Spine01', spine2: 'Spine', neck: 'neck', head: 'Head',
   rArm: 'RightArm', rFore: 'RightForeArm', rHand: 'RightHand', lArm: 'LeftArm', lFore: 'LeftForeArm', lHand: 'LeftHand',
   rUp: 'RightUpLeg', rLeg: 'RightLeg', rFoot: 'RightFoot', lUp: 'LeftUpLeg', lLeg: 'LeftLeg', lFoot: 'LeftFoot',
+  rToe: 'RightToeBase', lToe: 'LeftToeBase',
 };
 // ゲームの「手前（f）」の手足 = モデルの右、「奥（b）」= 左（右向きのとき右半身がカメラ側）
 // どの骨を、ゲームの骨組みのどの2点の向きに合わせるか
@@ -37,7 +38,8 @@ const AIM = [
 ];
 // 向きを合わせるときの、ねらう子の骨
 const CHILD = { hips: 'spine0', spine0: 'spine1', spine1: 'spine2', spine2: 'neck', neck: 'head', head: null,
-  rArm: 'rFore', rFore: 'rHand', lArm: 'lFore', lFore: 'lHand', rUp: 'rLeg', rLeg: 'rFoot', lUp: 'lLeg', lLeg: 'lFoot' };
+  rArm: 'rFore', rFore: 'rHand', lArm: 'lFore', lFore: 'lHand', rUp: 'rLeg', rLeg: 'rFoot', lUp: 'lLeg', lLeg: 'lFoot',
+  rFoot: 'rToe', lFoot: 'lToe' };
 const CHAINS = [
   { prefix: 'hair_', n: 4, stiff: 0.07, damp: 0.86, grav: 0.35, collide: 'body' },
   { prefix: 'skirtF_', n: 3, stiff: 0.16, damp: 0.8, grav: 0.3, collide: 'legs' },
@@ -117,7 +119,10 @@ MR.build = function (entry, f, scene) {
     const local = bs.map((b, i) => dirs[i].clone().applyQuaternion(rest[b.name].wq.clone().invert()));
     chains.push(Object.assign({}, c, { bones: bs, lens, local, pts: null, prev: null }));
   }
-  return { holder, inner, root, bones, rest, restDir, hipsParentWQ, hipsParentInv, chains, mats, sc, curQ: {}, lastX: null };
+  // 体の幅（肩幅・腰幅の半分）：2Dの骨組みに奥行きをつけるときに使う
+  const half = (a, b) => (bones[a] && bones[b] ? rest[bones[a].name].wp.distanceTo(rest[bones[b].name].wp) / 2 : 6);
+  const Ws = half('rArm', 'lArm'), Wh = half('rUp', 'lUp');
+  return { holder, inner, root, bones, rest, restDir, hipsParentWQ, hipsParentInv, chains, mats, sc, curQ: {}, lastX: null, Ws, Wh, P3: {} };
 };
 
 // 2点（ゲームの骨組み：前向き・上がプラス）→ 3Dの向き
@@ -129,29 +134,115 @@ function dirOf(pts, a, b, zBias, out) {
   return out;
 }
 
+// 2Dの骨組み（画面に平行な板）を、体の厚み・ひねりのある3Dの関節位置に起こす
+//  ・腰と胸を別々にひねる（パンチで肩が前に出る）
+//  ・前に伸ばした手は体の中心線に向かう／曲げたひじと膝は少し外に張る
+const _c = (v, a, b) => (v < a ? a : v > b ? b : v);
+function lift3D(mr, f, pts) {
+  const P = mr.P3, D = f.disp, sc = (f.look && f.look.scale) || 1;
+  const tw = _c(D.tw || 0, -1.2, 1.2);
+  const yawH = tw * 0.32, yawC = tw * 0.85; // 腰は少し、胸は大きくひねる
+  const sH = Math.sin(yawH), cH = Math.cos(yawH), sC = Math.sin(yawC), cC = Math.cos(yawC);
+  const set = (k, x, y, z) => { (P[k] || (P[k] = new V3())).set(x, y, z); return P[k]; };
+  set('H', pts.H[0], pts.H[1], 0); set('N', pts.N[0], pts.N[1], 0); set('head', pts.head[0], pts.head[1], 0);
+  const Ws = mr.Ws, Wh = mr.Wh, S = pts.S;
+  const armL = (18 + 17) * sc, legL = (24 + 23) * sc;
+  for (const [k, side] of [['f', 1], ['b', -1]]) {
+    // 肩（胸のひねりで前後に動く）
+    const sx = S[0] + side * Ws * sC, sz = side * Ws * cC;
+    set(k + 'S', sx, S[1], sz);
+    const ex = pts[k + 'E'][0] - pts[k + 'S'][0], ey = pts[k + 'E'][1] - pts[k + 'S'][1];
+    const hx = pts[k + 'H'][0] - pts[k + 'E'][0], hy = pts[k + 'H'][1] - pts[k + 'E'][1];
+    const reach = _c((pts[k + 'H'][0] - pts[k + 'S'][0]) / armL, -1, 1);
+    const fold = _c(1 - Math.hypot(pts[k + 'H'][0] - pts[k + 'S'][0], pts[k + 'H'][1] - pts[k + 'S'][1]) / armL, 0, 1);
+    const conv = Math.max(0, reach);
+    const hz = sz * (1 - 0.8 * conv) + (reach < 0 ? sz * 0.25 * -reach : 0) + side * Ws * 0.25 * fold;
+    const ez = sz * (1 - 0.45 * conv) + side * Ws * 0.45 * fold;
+    set(k + 'E', sx + ex, S[1] + ey, ez);
+    set(k + 'H', sx + ex + hx, S[1] + ey + hy, hz);
+    // 股関節（腰のひねり）→ 膝は少し外へ、足は腰の真下あたり
+    const hpx = pts.H[0] + side * Wh * sH, hpz = side * Wh * cH;
+    set(k + 'Hp', hpx, pts.H[1], hpz);
+    const kx = pts[k + 'K'][0] - pts[k + 'Hp'][0], ky = pts[k + 'K'][1] - pts[k + 'Hp'][1];
+    const fx = pts[k + 'F'][0] - pts[k + 'K'][0], fy = pts[k + 'F'][1] - pts[k + 'K'][1];
+    const lfold = _c(1 - Math.hypot(pts[k + 'F'][0] - pts[k + 'Hp'][0], pts[k + 'F'][1] - pts[k + 'Hp'][1]) / legL, 0, 1);
+    set(k + 'K', hpx + kx, pts.H[1] + ky, hpz * (1.05 + 0.5 * lfold));
+    set(k + 'F', hpx + kx + fx, pts.H[1] + ky + fy, hpz * 1.02);
+  }
+  return { yawH, yawC };
+}
+const AIM3 = {
+  hips: ['H', 'N'], spine0: ['H', 'N'], spine1: ['H', 'N'], spine2: ['H', 'N'], neck: ['N', 'head'], head: ['N', 'head'],
+  rArm: ['fS', 'fE'], rFore: ['fE', 'fH'], lArm: ['bS', 'bE'], lFore: ['bE', 'bH'],
+  rUp: ['fHp', 'fK'], rLeg: ['fK', 'fF'], lUp: ['bHp', 'bK'], lLeg: ['bK', 'bF'],
+};
+const UPV = new V3(0, 1, 0);
+// 目線：ふだんは相手の顔、攻撃中は当てる場所、撃つ技は撃つ方向を見る
+const _gUp = new V3();
+function gaze(mr, f, pts, x, y) {
+  const st = f.state, D = f.disp;
+  const look = (f.c.look && f.c.look.gaze) || {};
+  let w = 0.75;
+  if (['tumble', 'hitstun', 'down', 'grabbed', 'dead', 'ledge', 'roll'].includes(st) || Math.abs(D.r || 0) % 360 > 30) w = 0;
+  if (w === 0) return { up: _gUp.copy(UPV), w: 0, turn: 0 };
+  const sc = (f.look && f.look.scale) || 1;
+  let tx, ty;
+  const m = st === 'move' ? f.move : null;
+  if (m && m.hits && m.hits.length && !m.hits[0].grab && !m.hits[0].cgrab) {
+    // 攻撃中：次に当たる（または当たっている）場所を見る
+    const fr = f.activeF >= 0 ? f.activeF : 0;
+    const h = m.hits.find(h => fr <= h.f[1]) || m.hits[m.hits.length - 1];
+    tx = h.x; ty = h.y;
+  } else if (m && m.events && m.events.some(e => e.proj)) {
+    const e = m.events.find(e => e.proj);
+    const a = (e.ang || 0) * Math.PI / 180;
+    tx = (e.x || 0) + Math.cos(a) * 200; ty = (e.y || 60) + Math.sin(a) * 200;
+  } else {
+    const o = f.b && f.b.other(f);
+    if (!o || !o.alive) { tx = 200; ty = pts.head[1]; }
+    else { tx = (o.x - x) * f.facing; ty = (y - o.y) + 72 * ((o.look && o.look.scale) || 1); }
+  }
+  const hx = pts.head[0], hy = pts.head[1];
+  let gx = tx - hx, gy = ty - hy;
+  let turn = 0;
+  if (gx < -8) { // 後ろを見る：カメラ側の肩ごしにふり向く
+    turn = (f.facing > 0 ? -1 : 1) * 1.15; gx = -gx;
+  }
+  const l = Math.hypot(gx, gy) || 1; gx /= l; gy /= l;
+  // 見上げ・見下ろしは±40度まで
+  const lim = 0.64; if (gy > lim) { gy = lim; gx = Math.sqrt(1 - lim * lim); } else if (gy < -lim) { gy = -lim; gx = Math.sqrt(1 - lim * lim); }
+  // 顔の「上」方向 ＝ 目線を90度起こした向き。キャラのクセ（あごの角度・首のかしげ）を足す
+  const pitch = (look.pitch || 0) * Math.PI / 180;
+  let ux = -gy, uy = gx;
+  const c = Math.cos(pitch), s2 = Math.sin(pitch);
+  const rx = ux * c - uy * s2, ry = ux * s2 + uy * c;
+  _gUp.set(rx, ry, (look.tilt || 0) * (f.facing > 0 ? 1 : -1)).normalize();
+  return { up: _gUp, w: (look.w !== undefined ? look.w : 1) * w, turn };
+}
+
 MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
   const { holder, bones, rest, restDir } = mr;
   holder.visible = f.alive;
   if (!f.alive) return;
-  holder.position.set(x, -y, 0);
+  holder.position.set(x, -y, f.depthZ || 0);
   holder.rotation.y = yaw;
   holder.updateMatrixWorld(true);
   // 腰の位置（ゲームの骨盤の位置へ）
   const hipsB = bones.hips;
   const target = tv1.set(pts.H[0], pts.H[1], 0);
-  // holder基準 → 腰の親の座標へ
   hipsB.position.copy(target.applyMatrix4(mr.hipsParentInv));
-  // 体のひねり
-  const tw = Math.max(-1.2, Math.min(1.2, f.disp.tw || 0));
+  // 3Dの関節位置とひねり
+  const { yawH, yawC } = lift3D(mr, f, pts);
+  const P = mr.P3;
+  const gz = gaze(mr, f, pts, x, y);
+  const twist = { hips: yawH, spine0: yawH + (yawC - yawH) * 0.3, spine1: yawH + (yawC - yawH) * 0.65, spine2: yawC,
+    neck: yawC * 0.45 + gz.turn * 0.4, head: yawC * 0.15 + gz.turn * 0.6 };
   const cur = mr.curQ;
   // 骨を親から順に向けていく（holder基準の回転で計算）
-  const order = ['hips', 'spine0', 'spine1', 'spine2', 'neck', 'head', 'rArm', 'rFore', 'lArm', 'lFore', 'rUp', 'rLeg', 'lUp', 'lLeg'];
-  const aimMap = {};
-  for (const a of AIM) aimMap[a[0]] = a;
+  const order = ['hips', 'spine0', 'spine1', 'spine2', 'neck', 'head', 'rArm', 'rFore', 'lArm', 'lFore', 'rUp', 'rLeg', 'lUp', 'lLeg', 'rFoot', 'lFoot'];
   const parentQ = b => {
     const p = b.parent;
     if (cur[p.name]) return cur[p.name];
-    // 動かしていない親：親の親から計算
     if (p.isBone) {
       const pq = parentQ(p);
       const q = pq.clone().multiply(rest[p.name].q);
@@ -161,17 +252,39 @@ MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
     return mr.hipsParentWQ;
   };
   for (const k in cur) delete cur[k];
+  const d = tv2;
   for (const k of order) {
     const b = bones[k];
-    if (!b) continue;
-    const a = aimMap[k];
+    if (!b || !restDir[k]) continue;
     const pq = parentQ(b);
-    const d = dirOf(pts, a[1], a[2], a[3] || 0, tv2);
-    // 立ち姿勢の向き → 目標の向き
+    if (k === 'rFoot' || k === 'lFoot') {
+      // 足：地面ではつま先を前に（かかとが浮いていれば、つま先立ち）。空中ではつま先を少し伸ばす
+      const s = k === 'rFoot' ? 'f' : 'b', side = s === 'f' ? 1 : -1;
+      const ank = P[s + 'F'], knee = P[s + 'K'];
+      const h = pts[s + 'F'][1];
+      if (f.grounded && h < 12) {
+        let lift = _c(h / 9, 0, 1);
+        // 反対の足を高く蹴り上げているときは、軸足のかかとが上がる（つま先立ち）
+        if (pts[(s === 'f' ? 'b' : 'f') + 'F'][1] > 34) lift = Math.max(lift, 0.4);
+        d.set(1, -0.12 - 1.6 * lift, side * 0.18).normalize();
+      } else {
+        d.subVectors(ank, knee).normalize().multiplyScalar(0.5).add(tv3.set(0.75, -0.1, side * 0.1)).normalize();
+      }
+    } else {
+      const a = AIM3[k];
+      d.subVectors(P[a[1]], P[a[0]]);
+      if (d.lengthSq() < 1e-6) d.set(0, 1, 0);
+      d.normalize();
+      // 頭：体が傾いても目線はねらう先へ（キャラごとのクセ：あごの上げ下げ・首のかしげ）
+      if (k === 'head' || k === 'neck') {
+        d.lerp(UPV, k === 'head' ? 0.35 : 0.2).normalize();
+        if (gz.w > 0) d.lerp(gz.up, gz.w * (k === 'head' ? 1 : 0.5)).normalize();
+      }
+    }
     tq1.setFromUnitVectors(restDir[k], d);
     const q = tq1.clone().multiply(rest[b.name].wq);
-    if (k === 'spine2' && tw) q.premultiply(tq2.setFromAxisAngle(d, tw * 0.45));
-    if (k === 'hips' && tw) q.premultiply(tq2.setFromAxisAngle(d, tw * 0.15));
+    const tw = twist[k];
+    if (tw) q.premultiply(tq2.setFromAxisAngle(d, tw));
     cur[b.name] = q;
     b.quaternion.copy(pq.clone().invert().multiply(q));
   }
@@ -183,6 +296,7 @@ MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
   for (const m of mr.mats) {
     if (flash) m.emissive.setRGB(flash, flash * (look.col === '#ffb347' ? 0.6 : 1), flash * (look.col === '#ffb347' ? 0.2 : 1));
     else if (look.glow) m.emissive.setRGB(look.glow * 0.5, look.glow * 0.42, look.glow * 0.15);
+    else if (look.dodge) m.emissive.setRGB(0.18, 0.26, 0.4); // 回避中（無敵）はうっすら青白く光る
     else m.emissive.setRGB(0, 0, 0);
     m.transparent = blink; m.opacity = blink ? 0.45 : 1;
   }

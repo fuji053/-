@@ -53,11 +53,11 @@ window.GAME_DATA = {
 
   /* ---------- カメラ ---------- */
   camera: {
-    minWidth: 600,   // 近いときに映す横幅の最小（小さいほど寄る）
+    minWidth: 1200,  // 近いときに映す横幅の最小（小さいほど寄る）。ステージ全体（幅900）と左右の空が見えるように
     padX: 360,       // 2人の間の距離に足す余白（横）
     minHeight: 300,  // 映す高さの最小
     padY: 260,       // 高さの余白
-    centerPull: 0.12,// ステージの中央にどれだけ寄せるか
+    centerPull: 0.3, // ステージの中央にどれだけ寄せるか
     zoomIn: 0.04,    // 寄るときの速さ
     zoomOut: 0.1,    // 引くときの速さ
   },
@@ -102,6 +102,18 @@ window.GAME_DATA = {
     cineStrongKb: 140,      // …この強さ以上の吹っ飛びなら演出を出す
     cineCooldown: 150,      // 演出が続けて出すぎないための間隔（コマ）
   },
+
+  /* ---------- ステージ（見た目）：床の広さなどの数値は下の stage で全ステージ共通 ---------- */
+  // platforms：すり抜け床（下からジャンプで乗れる・スティックを下にはじくと降りる）
+  //   x = 横の位置（中央が0）、h = 床からの高さ、w = 幅
+  stages: [
+    { id: 'temple', name: '天空神殿', thumb: 'stage/temple_thumb.jpg', bgm: 'temple',
+      platforms: [{ x: -235, h: 130, w: 190 }, { x: 235, h: 130, w: 190 }, { x: 0, h: 250, w: 190 }] },
+    { id: 'city',   name: '摩天楼の屋上', thumb: 'stage/city_thumb.jpg', bgm: 'city',
+      platforms: [{ x: -210, h: 150, w: 210 }, { x: 210, h: 150, w: 210 }] },
+    { id: 'castle', name: '夜桜の古城', thumb: 'stage/castle_thumb.jpg', bgm: 'castle',
+      platforms: [{ x: -250, h: 120, w: 170 }, { x: 0, h: 210, w: 230 }, { x: 250, h: 120, w: 170 }] },
+  ],
 
   stage: {
     name: '天空の舞台（仮）',
@@ -409,7 +421,7 @@ window.GAME_DATA = {
       model: 'wrestler.glb', // 3Dモデル（Higgsfieldで作成）
       stats: { weight: 125, walk: 2.8, run: 5.0, air: 3.2, airAccel: 0.32, jump: 13.8, djump: 12.8,
                gravity: 0.66, fall: 11, airJumps: 1, dmgMul: 1.1, kbMul: 1.0, speed: 0.92 },
-      look: { thick: 9.5, head: 11.5 },
+      look: { thick: 9.5, head: 11.5, gaze: { pitch: 10 } }, // gaze：目線のクセ（pitch：あごを上げる角度、tilt：首のかしげ）
       cpu: { style: 'rush', range: 55, cgrab: true },
       specials: {
         /* --- 地上 --- */
@@ -491,7 +503,7 @@ window.GAME_DATA = {
       model: 'fox.glb', // 3Dモデル（Higgsfieldで作成・Blenderでしっぽとマフラーの骨を追加）
       stats: { weight: 80, walk: 3.8, run: 8.4, air: 4.5, airAccel: 0.52, jump: 15.8, djump: 15,
                gravity: 0.62, fall: 10.8, airJumps: 1, dmgMul: 0.95, kbMul: 1.0, speed: 1.1 },
-      look: { thick: 5.5, head: 9, scale: 0.8 }, // scale：体の大きさ（0.8 = 2割小さい。くらう範囲も小さくなる）
+      look: { thick: 5.5, head: 9, scale: 0.8, gaze: { pitch: -9 } }, // scale：体の大きさ（0.8 = 2割小さい。くらう範囲も小さくなる）
       cpu: { style: 'mid', range: 70, counter: true },
       specials: {
         /* --- 地上 --- */
@@ -559,7 +571,7 @@ window.GAME_DATA = {
       model: 'archer.glb', // 3Dモデル（Higgsfieldで作成・Blenderで髪と布の骨を追加）
       stats: { weight: 92, walk: 3.4, run: 6.2, air: 3.9, airAccel: 0.42, jump: 15.2, djump: 14.2,
                gravity: 0.55, fall: 9.5, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.0 },
-      look: { thick: 6, head: 10 },
+      look: { thick: 6, head: 10, gaze: { pitch: 3, tilt: 0.08 } },
       cpu: { style: 'zone', range: 330, reflect: true },
       specials: {
         /* --- 地上 --- */
@@ -625,7 +637,7 @@ window.GAME_DATA = {
       swapPct: 100,
       stats: { weight: 88, walk: 3.5, run: 6.6, air: 4.0, airAccel: 0.44, jump: 15, djump: 14,
                gravity: 0.56, fall: 9.8, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.04 },
-      look: { thick: 5.5, head: 10 },
+      look: { thick: 5.5, head: 10, gaze: { pitch: 5, tilt: 0.16 } },
       cpu: { style: 'zone', range: 300, mine: true },
       specials: {
         /* --- 地上 --- */
