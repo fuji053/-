@@ -10,6 +10,17 @@ const cache = new Map(); // url -> { gltf, ready, failed, waiters }
 const V3 = THREE.Vector3, Q = THREE.Quaternion, M4 = THREE.Matrix4;
 const tv1 = new V3(), tv2 = new V3(), tv3 = new V3(), tq1 = new Q(), tq2 = new Q(), tm1 = new M4();
 
+// ふちの光（リムライト）：キャラの輪郭が明るく光って、背景から浮き上がって見える（スマブラのような見え方）
+function addRim(m, col, str) {
+  m.onBeforeCompile = sh => {
+    sh.uniforms.rimColor = { value: new THREE.Color(col || 0xdfe9ff) };
+    sh.uniforms.rimStr = { value: str || 0.32 };
+    sh.fragmentShader = 'uniform vec3 rimColor; uniform float rimStr;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n  float rimF = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.2);\n  totalEmissiveRadiance += rimColor * rimF * rimStr;');
+  };
+  m.customProgramCacheKey = () => 'rim';
+}
+window.addRim = addRim;
 MR.load = function (url) {
   let e = cache.get(url);
   if (e) return e;
@@ -62,6 +73,7 @@ MR.build = function (entry, f, scene) {
       m.emissiveMap = null; m.emissive = new THREE.Color(0, 0, 0);
       m.metalness = 0.1; m.roughness = 0.75; // 環境光の映り込みがないので、金属っぽさを弱めて暗くならないように
       if (f.slot === 1 && f.b && f.b.f[0].c.id === f.c.id) m.color = new THREE.Color(0.78, 0.88, 1.15); // 同じキャラ同士は色を少し変える
+      addRim(m);
       m.needsUpdate = true;
       mats.push(m);
     }

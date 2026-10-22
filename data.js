@@ -126,9 +126,9 @@ window.GAME_DATA = {
   cpu: {
     default: 'normal',
     levels: {
-      weak:   { name: '弱い',   reaction: 22, aggression: 0.35, shieldChance: 0.08, mistake: 0.35, techChance: 0.1, combo: 0.0 },
-      normal: { name: 'ふつう', reaction: 10, aggression: 0.6,  shieldChance: 0.22, mistake: 0.12, techChance: 0.45, combo: 0.35 },
-      strong: { name: '強い',   reaction: 4,  aggression: 0.8,  shieldChance: 0.38, mistake: 0.03, techChance: 0.85, combo: 0.8 },
+      weak:   { name: '弱い',   reaction: 22, aggression: 0.35, shieldChance: 0.08, mistake: 0.35, techChance: 0.1, combo: 0.0, parryChance: 0.0 },
+      normal: { name: 'ふつう', reaction: 10, aggression: 0.6,  shieldChance: 0.22, mistake: 0.12, techChance: 0.45, combo: 0.35, parryChance: 0.2 },
+      strong: { name: '強い',   reaction: 4,  aggression: 0.8,  shieldChance: 0.38, mistake: 0.03, techChance: 0.85, combo: 0.8, parryChance: 0.45 },
     },
   },
 
@@ -407,6 +407,66 @@ window.GAME_DATA = {
       dair:  { name: '空下：落星（メテオ）', dur: 40, landLag: 14,
                poses: [[0,'fall'],[4,'aimDown'],[11,'releaseDown'],[40,'fall']],
                events: [{ f:11, proj:'arrow', ang:-90, x:0, y:20, speed:20, dmg:9, kang:270, bkb:40, kbg:70 }, { f:11, vy:5 }] },
+    },
+
+    /* ---------- メカ（ロボ）：重くて大きい。一発一発が重い ---------- */
+    mech: {
+      jab:   { name: '弱1：ジャブ', dur: 18, iasa: 15, next: { key:'jab2', f:[4,14] },
+               poses: [[0,'jabReady'],[3,'punch'],[7,'punch'],[18,'idle']],
+               hits: [{ f:[3,4], x:48, y:82, r:18, dmg:3, ang:20, fkb:32, react:'light' }] },
+      jab2:  { name: '弱2：ストレート', dur: 20, iasa: 17, next: { key:'jab3', f:[4,16] },
+               poses: [[0,'punch'],[3,'punch2'],[8,'punch2'],[20,'idle']],
+               hits: [{ f:[3,4], x:50, y:80, r:18, dmg:3, ang:20, fkb:34, react:'light' }] },
+      jab3:  { name: '弱3：ブーストアッパー', dur: 34, iasa: 30,
+               poses: [[0,'uppercutWind'],[6,'uppercut'],[14,'uppercut'],[34,'idle']],
+               hits: [{ f:[6,8], x:40, y:96, r:22, dmg:6, ang:72, bkb:55, kbg:28 }] },
+      ftilt: { name: '横強：アームハンマー', dur: 32, iasa: 28,
+               poses: [[0,'rocketWind'],[8,'rocketPunch',{tw:0.6}],[15,'rocketPunch'],[32,'idle']],
+               events: [{ f:[6,9], vx:3 }],
+               hits: [{ f:[8,10], x:56, y:78, r:22, dmg:12, ang:38, bkb:35, kbg:105 }] },
+      utilt: { name: '上強：ジェットアッパー', dur: 32, iasa: 28,
+               poses: [[0,'uppercutWind'],[6,'uppercut'],[14,'uppercut'],[32,'idle']],
+               hits: [{ f:[6,10], x:24, y:118, r:26, dmg:10, ang:88, bkb:42, kbg:128 }] },
+      dtilt: { name: '下強：ローキック', dur: 26, iasa: 22,
+               poses: [[0,'sweepWind'],[6,'sweep'],[12,'sweep'],[26,'crouch']],
+               hits: [{ f:[6,8], x:50, y:12, r:20, dmg:8, ang:75, bkb:45, kbg:40 }] },
+
+      dashAttack: { name: 'ダッシュA：ブーストショルダー', dur: 44,
+               poses: [[0,'dashStart'],[4,'tackle'],[18,'tackle'],[44,'idle']],
+               events: [{ f:[2,16], vx:8 }],
+               hits: [{ f:[5,15], x:34, y:70, r:30, dmg:12, ang:45, bkb:60, kbg:82 }] },
+
+      fsmash:{ name: '横スマ：ロケットパンチ', dur: 66, charge: { f:12, max:60, mul:1.4 },
+               poses: [[0,'rocketWind'],[12,'rocketWind'],[17,'rocketPunch'],[32,'rocketPunch'],[66,'idle']],
+               events: [{ f:16, vx:7 }, { f:17, blast:{ x:70, y:80, col:'#8fe6ff' } }],
+               hits: [{ f:[17,20], x:62, y:80, r:26, dmg:24, ang:38, bkb:44, kbg:76 }] },
+      usmash:{ name: '上スマ：スラスターアッパー', dur: 62, charge: { f:10, max:60, mul:1.4 },
+               poses: [[0,'smashUpWind'],[10,'smashUpWind'],[15,'smashUp'],[28,'smashUp'],[62,'idle']],
+               hits: [{ f:[15,19], x:10, y:136, r:30, dmg:20, ang:88, bkb:42, kbg:78 },
+                      { f:[15,16], x:30, y:70, r:24, dmg:12, ang:92, bkb:50, kbg:57 }] },
+      dsmash:{ name: '下スマ：グラウンドパウンド', dur: 64, charge: { f:12, max:60, mul:1.4 },
+               poses: [[0,'poundWind'],[12,'poundWind'],[18,'pound'],[32,'pound'],[64,'idle']],
+               events: [{ f:18, quake:true }],
+               hits: [{ f:[18,21], x:56, y:10, r:28, dmg:19, ang:30, bkb:42, kbg:65 },
+                      { f:[18,21], x:-56, y:10, r:28, dmg:19, ang:150, bkb:42, kbg:65 }] },
+
+      nair:  { name: '空N：スピンアーム', dur: 40, landLag: 12,
+               poses: [[0,'fall',{yw:0}],[4,'nairSpread',{yw:0}],[20,'nairSpread',{yw:720}],[40,'fall',{yw:720}]],
+               hits: [{ f:[5,9], x:0, y:62, r:40, dmg:11, ang:45, bkb:30, kbg:102 },
+                      { f:[10,20], x:0, y:62, r:36, dmg:7, ang:45, bkb:25, kbg:79 }] },
+      fair:  { name: '空前：ハンマーナックル', dur: 44, landLag: 16,
+               poses: [[0,'fall'],[4,'overheadWind'],[12,'overheadWind'],[15,'overheadSlam'],[26,'overheadSlam'],[44,'fall']],
+               hits: [{ f:[15,18], x:46, y:50, r:26, dmg:14, ang:45, bkb:35, kbg:90 }] },
+      bair:  { name: '空後：ジェットキック', dur: 38, landLag: 12,
+               poses: [[0,'fall'],[4,'backKickWind'],[8,'backKick'],[18,'backKick'],[38,'fall']],
+               events: [{ f:8, blast:{ x:-20, y:70, col:'#8fe6ff' } }],
+               hits: [{ f:[8,11], x:-54, y:50, r:26, dmg:15, ang:140, bkb:34, kbg:90 }] },
+      uair:  { name: '空上：アームアッパー', dur: 34, landLag: 9,
+               poses: [[0,'fall'],[4,'smashUpWind'],[8,'smashUp'],[18,'smashUp'],[34,'fall']],
+               hits: [{ f:[8,12], x:6, y:130, r:28, dmg:11, ang:86, bkb:32, kbg:108 }] },
+      dair:  { name: '空下：ヘビースタンプ（メテオ）', dur: 46, landLag: 22,
+               poses: [[0,'fall'],[4,'tuck'],[12,'footStamp'],[26,'footStamp'],[46,'fall']],
+               hits: [{ f:[12,16], x:2, y:-8, r:26, dmg:16, ang:270, bkb:40, kbg:75 }] },
     },
 
     /* ---------- ツメ（猫）：4本足。小さくて速い。氷の姿の通常技（炎の姿は強い技だけ入れかわる） ---------- */
@@ -850,12 +910,73 @@ window.GAME_DATA = {
       overrides: {},
     },
 
+    /* ===== 31：ロボ（近〜遠距離・パワー・特殊）大きくて重い。ためビームとジェット飛行 =====
+       弱点：体が大きく当たりやすい。重くて落ちるのが速く、のけぞりも長いので連続技を入れられやすい */
+    {
+      id: 'robot', no: 31, name: 'ロボ', range: '万能', type: 'パワー', weapon: 'mech',
+      portrait: 'face_robot.jpg',
+      model: 'robot.glb', // 3Dモデル（Higgsfieldで作成）
+      // hitstunMul：のけぞる時間の倍率（1.18 = 18%長い → 連続技を入れられやすい）
+      stats: { weight: 132, walk: 2.6, run: 5.2, air: 3.1, airAccel: 0.28, jump: 13.2, djump: 12.2,
+               gravity: 0.86, fall: 13.5, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 0.88, hitstunMul: 1.25 },
+      look: { thick: 10.5, head: 12, scale: 1.24, gaze: { pitch: 2 } }, // scale：体の大きさ（1.18 = 18%大きい。くらう範囲も大きい）
+      jetFuel: 85, jetRegen: 1.2, // ジェットの燃料（飛べるコマ数）と、地面にいるときの回復の速さ
+      cpu: { style: 'mid', range: 80 },
+      specials: {
+        /* --- 地上 --- */
+        n:    { name: 'NB：チャージビーム（ためるほど太く強い）', dur: 40,
+                holdShot: { f:8, max:90, over:40, min:{ dmg:6, speed:0, bkb:30, kbg:25 }, max2:{ dmg:24, speed:0, bkb:45, kbg:50 } },
+                poses: [[0,'beamCharge'],[8,'beamCharge'],[11,'beamFire'],[26,'beamFire'],[40,'idle']],
+                events: [{ f:11, proj:'beam', shot:true, ang:0, x:62, y:84 }] },
+        side: { name: '横B：ブーストタックル（アーマー）', dur: 50, armor: [6, 22],
+                poses: [[0,'dashStart'],[6,'tackle'],[24,'tackle'],[50,'idle']],
+                events: [{ f:[7,22], vx:10 }, { f:7, blast:{ x:-30, y:80, col:'#8fe6ff' } }],
+                hits: [{ f:[8,22], x:36, y:70, r:30, dmg:14, ang:42, bkb:50, kbg:89 }] },
+        up:   { name: '上B：ジェット飛行（Bを押している間、スティックの方へ飛ぶ）', dur: 20, jet: { f:6, speed:6.2, accel:0.8 }, landLag: 10,
+                poses: [[0,'crouch'],[6,'jetFly'],[20,'fall']],
+                gravityFrames: [0,6] },
+        down: { name: '下B：グラウンドスラム', dur: 58,
+                poses: [[0,'poundWind'],[14,'poundWind'],[20,'pound'],[34,'pound'],[58,'idle']],
+                events: [{ f:20, quake:true }, { f:20, proj:'shock', dir:1 }, { f:20, proj:'shock', dir:-1 }],
+                hits: [{ f:[20,22], x:40, y:12, r:30, dmg:12, ang:80, bkb:55, kbg:60 },
+                       { f:[20,22], x:-40, y:12, r:30, dmg:12, ang:100, bkb:55, kbg:60 }] },
+        /* --- 空中 --- */
+        airN: { name: '空中NB：チャージビーム', dur: 40, landLag: 12, gravityMul: 0.2,
+                holdShot: { f:8, max:70, over:30, min:{ dmg:6, speed:0, bkb:30, kbg:30 }, max2:{ dmg:20, speed:0, bkb:42, kbg:56 } },
+                poses: [[0,'beamCharge'],[8,'beamCharge'],[11,'beamFire'],[26,'beamFire'],[40,'fall']],
+                events: [{ f:11, proj:'beam', shot:true, ang:0, x:62, y:84 }] },
+        airF: { name: '空中前B：ブーストナックル', dur: 44, landLag: 16, oncePerAir: true, gravityMul: 0.2,
+                poses: [[0,'rocketWind'],[8,'rocketPunch'],[22,'rocketPunch'],[44,'fall']],
+                events: [{ f:0, vy:1.5 }, { f:[7,16], vx:9, vy:-1 }, { f:7, blast:{ x:-30, y:80, col:'#8fe6ff' } }],
+                hits: [{ f:[9,14], x:56, y:78, r:28, dmg:14, ang:40, bkb:44, kbg:99 }] },
+        airB: { name: '空中後B：リバースロケットパンチ', dur: 42, landLag: 14,
+                poses: [[0,'fall'],[3,'rocketWind'],[12,'rocketPunch'],[24,'rocketPunch'],[42,'fall']],
+                events: [{ f:2, turn:true }, { f:12, blast:{ x:72, y:80, col:'#8fe6ff' } }],
+                hits: [{ f:[12,14], x:60, y:80, r:28, dmg:17, ang:40, bkb:40, kbg:95 }] },
+        airU: { name: '空中上B：ジェット飛行', dur: 20, jet: { f:4, speed:6.2, accel:0.8 }, landLag: 10,
+                poses: [[0,'fall'],[4,'jetFly'],[20,'fall']],
+                gravityFrames: [0,4] },
+        airD: { name: '空中下B：メテオダイブ', dur: 70, landLag: 26, helpless: true,
+                poses: [[0,'tuck'],[8,'footStamp'],[70,'footStamp']],
+                events: [{ f:0, vy:4 }, { f:[9,69], vy:-18, vx:0 }],
+                gravityFrames: [0,70],
+                landSpawn: [{ proj:'shock', dir:1 }, { proj:'shock', dir:-1 }],
+                hits: [{ f:[9,69], x:4, y:10, r:28, dmg:14, ang:270, bkb:40, kbg:70 }] },
+      },
+      projectiles: {
+        // ビーム：minLen〜maxLen = ためなし〜最大ための長さ / r〜r2 = 太さ / life = 出ている時間
+        beam:  { type:'beam', life:14, minLen:170, maxLen:560, r:7, r2:18, dmg:6, ang:35, bkb:30, kbg:40 },
+        shock: { type:'shock', speed:7, life:30, r:18, dmg:9, ang:70, bkb:42, kbg:60 },
+      },
+      overrides: {},
+    },
+
     /* ===== 21：ネコ（近距離・スピード⇔パワー・4本足）下Bで「氷」と「炎」が入れかわる =====
        小さくて攻撃が当たりにくいかわりに、軽くて飛ばされやすい。
        氷：スピード重視。下強 → 横強／NB／横B につながりやすい
        炎：パワー重視。スマッシュが炎のパンチで、よく飛ばす */
     {
-      id: 'cat', no: 21, name: 'ネコ（氷）', range: '近距離', type: '氷⇔炎チェンジ', weapon: 'claw',
+      id: 'cat', no: 21, name: 'ネコ（氷）', range: '近距離', type: '氷⇔炎', weapon: 'claw',
       portrait: 'face_cat_ice.jpg',
       model: 'cat_ice.glb', // 3Dモデル（Higgsfieldで作成・Blenderで4本足の骨を追加）
       stats: { weight: 72, walk: 3.6, run: 7.6, air: 4.2, airAccel: 0.5, jump: 15.2, djump: 14.4,

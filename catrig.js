@@ -44,6 +44,7 @@ QR.build = function (entry, f, scene) {
       m.emissiveMap = null; m.emissive = new THREE.Color(0, 0, 0);
       m.metalness = 0.05; m.roughness = 0.85;
       if (f.slot === 1 && f.b && f.b.f[0].c.id === f.c.id) m.color = new THREE.Color(0.78, 0.88, 1.15);
+      if (window.addRim) window.addRim(m, 0xe6eeff, 0.35);
       m.needsUpdate = true;
       mats.push(m);
     }
