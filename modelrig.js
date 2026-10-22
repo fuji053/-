@@ -135,7 +135,8 @@ MR.build = function (entry, f, scene) {
   // 体の幅（肩幅・腰幅の半分）：2Dの骨組みに奥行きをつけるときに使う
   const half = (a, b) => (bones[a] && bones[b] ? rest[bones[a].name].wp.distanceTo(rest[bones[b].name].wp) / 2 : 6);
   const Ws = half('rArm', 'lArm'), Wh = half('rUp', 'lUp');
-  return { holder, inner, root, bones, rest, restDir, hipsParentWQ, hipsParentInv, chains, mats, sc, curQ: {}, lastX: null, Ws, Wh, P3: {} };
+  const hipRestY = (rest[bones.hips.name].wp.y - Math.min(rest[bones.rFoot.name].wp.y, rest[bones.lFoot.name].wp.y)) + 2 * ((f.look && f.look.scale) || 1); // 立った時の腰の高さ（ゲームの単位）
+  return { hipRestY, holder, inner, root, bones, rest, restDir, hipsParentWQ, hipsParentInv, chains, mats, sc, curQ: {}, lastX: null, Ws, Wh, P3: {} };
 };
 
 // 2点（ゲームの骨組み：前向き・上がプラス）→ 3Dの向き
@@ -171,16 +172,34 @@ function lift3D(mr, f, pts) {
     const conv = Math.max(0, reach);
     const hz = sz * (1 - 0.8 * conv) + (reach < 0 ? sz * 0.25 * -reach : 0) + side * Ws * 0.25 * fold;
     const ez = sz * (1 - 0.45 * conv) + side * Ws * 0.45 * fold;
-    set(k + 'E', sx + ex, S[1] + ey, ez);
-    set(k + 'H', sx + ex + hx, S[1] + ey + hy, hz);
+    // 腕を体の横へ開く（fy・by）：肩を中心に、縦の軸のまわりで回す（ラリアットで腕が体の横から前へ回る）
+    const ya = side * ((side > 0 ? D.fy : D.by) || 0) * Math.PI / 180;
+    if (ya) {
+      const c = Math.cos(ya), s = Math.sin(ya), rot = (x, z) => [x * c - z * s, x * s + z * c];
+      const [e1, e2] = rot(ex, ez - sz), [h1, h2] = rot(ex + hx, hz - sz);
+      set(k + 'E', sx + e1, S[1] + ey, sz + e2);
+      set(k + 'H', sx + h1, S[1] + ey + hy, sz + h2);
+    } else {
+      set(k + 'E', sx + ex, S[1] + ey, ez);
+      set(k + 'H', sx + ex + hx, S[1] + ey + hy, hz);
+    }
     // 股関節（腰のひねり）→ 膝は少し外へ、足は腰の真下あたり
     const hpx = pts.H[0] + side * Wh * sH, hpz = side * Wh * cH;
     set(k + 'Hp', hpx, pts.H[1], hpz);
     const kx = pts[k + 'K'][0] - pts[k + 'Hp'][0], ky = pts[k + 'K'][1] - pts[k + 'Hp'][1];
     const fx = pts[k + 'F'][0] - pts[k + 'K'][0], fy = pts[k + 'F'][1] - pts[k + 'K'][1];
     const lfold = _c(1 - Math.hypot(pts[k + 'F'][0] - pts[k + 'Hp'][0], pts[k + 'F'][1] - pts[k + 'Hp'][1]) / legL, 0, 1);
-    set(k + 'K', hpx + kx, pts.H[1] + ky, hpz * (1.05 + 0.5 * lfold));
-    set(k + 'F', hpx + kx + fx, pts.H[1] + ky + fy, hpz * 1.02);
+    const kz = hpz * (1.05 + 0.5 * lfold), fz = hpz * 1.02;
+    const la = side * ((side > 0 ? D.fly : D.bly) || 0) * Math.PI / 180; // 脚を横へ開く（回し蹴り）
+    if (la) {
+      const c = Math.cos(la), s = Math.sin(la), rot = (x, z) => [x * c - z * s, x * s + z * c];
+      const [k1, k2] = rot(kx, kz - hpz), [f1, f2] = rot(kx + fx, fz - hpz);
+      set(k + 'K', hpx + k1, pts.H[1] + ky, hpz + k2);
+      set(k + 'F', hpx + f1, pts.H[1] + ky + fy, hpz + f2);
+    } else {
+      set(k + 'K', hpx + kx, pts.H[1] + ky, kz);
+      set(k + 'F', hpx + kx + fx, pts.H[1] + ky + fy, fz);
+    }
   }
   return { yawH, yawC };
 }
@@ -244,6 +263,14 @@ MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
   // 腰の位置（ゲームの骨盤の位置へ）
   const hipsB = bones.hips;
   const target = tv1.set(pts.H[0], pts.H[1], 0);
+  // モーション再生中は、腰の高さもモーションに合わせる（脚がのびた分だけ腰が上がる）
+  mocapStep(mr, f);
+  if (mr.mcW > 0 && mr.mcCur && mr.mcCur.hy) {
+    const hy = hipsYOf(mr.mcCur);
+    const hy2 = mr.mcPrev && mr.mcX < 1 ? (mr.mcPrev.hy ? hipsYOf(mr.mcPrev) : target.y / mr.hipRestY) : hy;
+    const h = hy2 + (hy - hy2) * (mr.mcX ?? 1);
+    target.y = target.y + (mr.hipRestY * h - target.y) * mr.mcW;
+  }
   hipsB.position.copy(target.applyMatrix4(mr.hipsParentInv));
   // 3Dの関節位置とひねり
   const { yawH, yawC } = lift3D(mr, f, pts);
@@ -302,6 +329,8 @@ MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
     cur[b.name] = q;
     b.quaternion.copy(pq.clone().invert().multiply(q));
   }
+  // 人の動きのデータ（モーション）がある動きは、それで上書きする（切りかわりはなめらかに混ぜる）
+  applyMocap(mr, f);
   mr.root.updateMatrixWorld(true);
   // 揺れもの
   simulateChains(mr);
@@ -315,6 +344,81 @@ MR.update = function (mr, f, pts, x, y, yaw, look, blink) {
     m.transparent = blink; m.opacity = blink ? 0.45 : 1;
   }
 };
+
+// どの状態でどのモーションを使うか
+//  t：モーションのどこを再生するか（0〜1）/ hy：腰の高さもモーションに合わせるか（空中はゲーム側が動かすので合わせない）/ arms：腕もモーションにするか
+const TAU = Math.PI * 2;
+const cl01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+function mocapFor(f) {
+  const M = window.MOCAP;
+  if (!M || (f.look && f.look.noMocap)) return null;
+  if (f.__mcForce) return f.__mcForce; // 確認用
+  const st = f.state, loop = (clock, name) => ((clock / M[name].dur) % 1 + 1) % 1;
+  switch (st) {
+    case 'run': return { name: 'run', t: ((f.walkPhase % TAU) + TAU) % TAU / TAU, hy: true };
+    case 'idle': return { name: 'idle', t: loop((f.anim || 0) / 60, 'idle'), hy: true };
+    case 'walk': return { name: 'walk', t: loop(f.walkClock || 0, 'walk'), hy: true };
+    case 'squat': return { name: 'jump', t: 0.1 + 0.14 * cl01(f.stateT / 4), hy: true };
+    case 'air': {
+      if (f.flipT < 24) return null; // 空中ジャンプの宙返りは今の動き
+      return { name: 'jump', t: 0.31 + 0.19 * cl01((f.vy + 12) / 18), hy: false };
+    }
+    case 'land': return { name: 'jump', t: 0.6 + 0.12 * cl01(f.stateT / 10), hy: true };
+    case 'hitstun': return { name: 'hit', t: 0.02 + 0.34 * cl01(f.stateT / Math.max(8, f.stateT + f.timer)), hy: f.grounded, arms: true };
+    case 'tumble': return f.stateT < (f.launchT || 0) + 6 ? { name: 'fly', t: 0.1 + 0.24 * cl01(f.stateT / ((f.launchT || 0) + 6)), hy: false, arms: true } : null;
+    case 'down': return { name: 'fly', t: 0.6, hy: true, arms: true };
+    case 'roll': { const u = cl01(f.stateT / 30); return { name: 'roll', t: f.rollDir === f.facing ? 0.12 + 0.8 * u : 0.92 - 0.8 * u, hy: true, arms: true }; }
+    case 'shield': case 'shieldstun': return { name: 'block', t: 0.25 + 0.05 * Math.sin((f.anim || 0) * 0.03), hy: true };
+  }
+  return null;
+}
+function hipsYOf(cur) {
+  const c = window.MOCAP[cur.name];
+  if (!c.hipsY || !c.hipsY.length) return 1;
+  const u = cur.t * c.n, i0 = Math.floor(u) % c.n, i1 = (i0 + 1) % c.n, fr = u - Math.floor(u);
+  return (c.hipsY[i0] * (1 - fr) + c.hipsY[i1] * fr) / c.restHipsY;
+}
+// 1コマごと：どのモーションを、どれだけ混ぜるか（モーション同士も、なめらかに切りかえる）
+function mocapStep(mr, f) {
+  const want = mocapFor(f);
+  if (want) {
+    if (mr.mcCur && mr.mcCur.name !== want.name && mr.mcW > 0) { mr.mcPrev = mr.mcCur; mr.mcX = 0; }
+    mr.mcCur = want;
+  }
+  if (mr.mcX !== undefined && mr.mcX < 1) mr.mcX = Math.min(1, mr.mcX + 0.2);
+  mr.mcW = Math.max(0, Math.min(1, (mr.mcW || 0) + (want ? 0.2 : -0.2))); // 5コマかけて切りかえる
+}
+const _mq0 = new Q(), _mq1 = new Q(), _mqr = new Q(), _mq2 = new Q();
+const MC_W = { Hips: 0.6, Spine02: 0.8 }; // 前のめりが強すぎるので、腰と背中は少しだけ弱める
+const ARMED = { katana: 0.25, bow: 0.2 };
+// モーションの1つの骨の回転（このモデルの立ち姿勢に直したもの）
+function sampleBone(mr, b, cur, out) {
+  const c = window.MOCAP[cur.name], r = c.rot[b.__mcName], cr = c.rest[b.__mcName];
+  if (!r) return false;
+  const n = c.n, u = cur.t * n, i0 = Math.floor(u) % n, i1 = (i0 + 1) % n, fr = u - Math.floor(u);
+  _mq0.set(r[i0 * 4], r[i0 * 4 + 1], r[i0 * 4 + 2], r[i0 * 4 + 3]);
+  _mq2.set(r[i1 * 4], r[i1 * 4 + 1], r[i1 * 4 + 2], r[i1 * 4 + 3]);
+  _mq0.slerp(_mq2, fr);
+  // モーションの「立ち姿勢からの変化」を、このモデルの立ち姿勢に足す
+  _mqr.set(cr[0], cr[1], cr[2], cr[3]).invert().multiply(_mq0);
+  out.copy(mr.rest[b.name].q).multiply(_mqr);
+  return true;
+}
+const FREE = ['LeftShoulder', 'RightShoulder', 'LeftHand', 'RightHand', 'LeftToeBase', 'RightToeBase']; // 今の動きでは動かさない骨
+function applyMocap(mr, f) {
+  if (!mr.freeBones) mr.freeBones = FREE.map(n => mr.root.getObjectByName(n)).filter(b => b && mr.rest[b.name]);
+  for (const b of mr.freeBones) b.quaternion.copy(mr.rest[b.name].q); // まず立ち姿勢に戻す（モーションを混ぜる分だけ動く）
+  if (!(mr.mcW > 0) || !mr.mcCur) return;
+  if (!mr.mcBones) { mr.mcBones = []; for (const name in window.MOCAP.run.rot) { const b = mr.root.getObjectByName(name); if (b && mr.rest[b.name]) { b.__mcName = name; mr.mcBones.push(b); } } }
+  const cur = mr.mcCur, prev = mr.mcX < 1 ? mr.mcPrev : null;
+  for (const b of mr.mcBones) {
+    if (!sampleBone(mr, b, cur, _mq1)) continue;
+    if (prev && sampleBone(mr, b, prev, tq2)) { tq2.slerp(_mq1, mr.mcX); _mq1.copy(tq2); }
+    // 刀・弓を持つキャラは、腕は武器の構えのまま（モーションは少しだけ混ぜる）。やられたときは腕もモーションに
+    const armK = ARMED[f.c.weapon] && !cur.arms && /Shoulder|Arm|Hand/.test(b.__mcName) ? ARMED[f.c.weapon] : 1;
+    b.quaternion.slerp(_mq1, mr.mcW * (MC_W[b.__mcName] || 1) * armK);
+  }
+}
 
 function simulateChains(mr) {
   const capsules = { body: [], legs: [] };
