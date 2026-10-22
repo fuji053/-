@@ -13,6 +13,18 @@ const FOV = 30;
 const UP = new THREE.Vector3(0, 1, 0);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true);
 const SPH = new THREE.SphereGeometry(1, 18, 14);
+let composer = null, bloom = null;
+// 描画が重い（1コマの描画が長い）状態が続いたら、ブルームを切って軽くする
+const perf = { n: 0, sum: 0, slow: 0 };
+function perfWatch(ms) {
+  if (!R.bloomOn) return;
+  perf.n++; perf.sum += ms;
+  if (perf.n >= 90) {
+    const avg = perf.sum / perf.n; perf.n = 0; perf.sum = 0;
+    perf.slow = avg > 9 ? perf.slow + 1 : 0;
+    if (perf.slow >= 2) { R.bloomOn = false; console.log('bloom off (avg ' + avg.toFixed(1) + 'ms)'); }
+  }
+}
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpD = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
 
 R.init = function (view) {
@@ -24,6 +36,16 @@ R.init = function (view) {
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x161c40, 1600, 4200);
   camera = new THREE.PerspectiveCamera(FOV, 1, 20, 9000);
+  // 光のにじみ（ブルーム）：ビーム・ジェット・光る技が、本当に光って見えるように。重い端末では自動で切る
+  if (THREE.EffectComposer && THREE.UnrealBloomPass) {
+    try {
+      composer = new THREE.EffectComposer(renderer);
+      composer.addPass(new THREE.RenderPass(scene, camera));
+      bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.3, 0.97);
+      composer.addPass(bloom);
+      R.bloomOn = true;
+    } catch (e) { composer = null; R.bloomOn = false; }
+  }
   // ステージ（背景・床・光）は stages3d.js で作る
   R.setStage(window.__game.D.stages ? window.__game.D.stages[0].id : 'temple');
   R.resize(view);
@@ -33,6 +55,7 @@ R.resize = function (view) {
   if (!renderer) return;
   renderer.setPixelRatio(view.dpr);
   renderer.setSize(view.w, view.h, false);
+  if (composer) { composer.setPixelRatio(view.dpr); composer.setSize(view.w, view.h); bloom.resolution.set(view.w / 2, view.h / 2); }
   camera.aspect = view.w / view.h;
   camera.updateProjectionMatrix();
 };
@@ -127,6 +150,18 @@ function makeRig(f) {
       rig.shades.visible = false; g.add(rig.shades);
     }
     mats.push(gm);
+  } else if (w === 'mech') {
+    // 腕のビーム砲（手前の腕の先）：白い筒＋青く光る砲口。ためると光が強くなる
+    rig.cannon = new THREE.Group(); g.add(rig.cannon);
+    const wm = new THREE.MeshStandardMaterial({ color: 0xe9edf2, metalness: 0.35, roughness: 0.35 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 5, 22, 14), wm); body.position.y = 6; rig.cannon.add(body);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(4.4, 1.1, 8, 18), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, metalness: 0.6, roughness: 0.3 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 16; rig.cannon.add(ring);
+    rig.cannonGlowM = new THREE.MeshBasicMaterial({ color: 0x5fd0ff });
+    const muzzle = new THREE.Mesh(new THREE.CircleGeometry(3.2, 16), rig.cannonGlowM); muzzle.rotation.x = -Math.PI / 2; muzzle.position.y = 17.2; rig.cannon.add(muzzle);
+    rig.cannonOrb = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.8, depthWrite: false }));
+    rig.cannonOrb.position.y = 19; rig.cannonOrb.visible = false; rig.cannon.add(rig.cannonOrb);
+    mats.push(wm);
   } else if (w === 'mirror') {
     rig.shieldMat = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.15, metalness: 0.85, emissive: 0x000000 });
     rig.mirror = new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 5, 28), rig.shieldMat); g.add(rig.mirror);
@@ -134,7 +169,7 @@ function makeRig(f) {
     rig.mirror.add(rimM); rimM.rotation.x = Math.PI / 2;
     mats.push(rig.shieldMat);
   }
-  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades, rig.twirl].filter(Boolean));
+  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades, rig.twirl, rig.cannon].filter(Boolean));
   // 3Dモデルがあるキャラは読み込みを始める（読み込めるまでは仮の体で表示）
   if (f.c.model && window.ModelRig) rig.modelEntry = window.ModelRig.load(f.c.model);
   const m2 = f.c.model2 || (f.c.form2 && f.c.form2.model); // ％が高くなったとき／下Bで切りかえたときの姿
@@ -143,6 +178,16 @@ function makeRig(f) {
   rig.bubble = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: f.slot === 0 ? 0xff5d5d : 0x4fa8ff, transparent: true, opacity: 0.28, depthWrite: false }));
   scene.add(rig.bubble);
   // 足元の影
+  // 攻撃の残像（帯）：先と根元の2点の軌跡を、なめらかな帯にする
+  {
+    const N = 40, geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+    const idx = []; for (let i = 0; i < N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    geo.setIndex(idx);
+    rig.ribbon = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    rig.ribbon.frustumCulled = false; rig.ribbon.visible = false; rig.ribbonN = N; scene.add(rig.ribbon);
+  }
   rig.shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
   rig.shadow.rotation.x = -Math.PI / 2;
   scene.add(rig.shadow);
@@ -160,7 +205,7 @@ const V = (p, z) => new THREE.Vector3(p[0], p[1], z);
 function updateRig(rig, f, alpha, G) {
   const g = rig.g;
   g.visible = f.alive;
-  rig.shadow.visible = false; rig.bubble.visible = false;
+  rig.shadow.visible = false; rig.bubble.visible = false; rig.ribbon.visible = false;
   if (rig.whip) for (const s of rig.whip) s.visible = f.alive;
   if (rig.wire) { rig.wire.visible = rig.hook.visible = false; rig.field.visible = false; }
   if (!f.alive || f.hidden) { g.visible = false; if (rig.mr) rig.mr.holder.visible = false; return; } // 瞬歩で消えている間も見えない
@@ -284,6 +329,17 @@ function updateRig(rig, f, alpha, G) {
       if (showShades) { rig.shades.position.set(fH3.x + ux * 4, fH3.y + uy * 4, fH3.z + 3); rig.shades.rotation.set(0, 0, ang); }
     }
   }
+  if (rig.cannon) {
+    // 前腕の向きに、手首の少し手前から前へ
+    const ang = Math.atan2(uy, ux), sc2 = (f.look.scale || 1) * (rig.mr ? 0.9 : 1);
+    rig.cannon.scale.setScalar(sc2);
+    rig.cannon.position.set(fH3.x - ux * 6 * sc2, fH3.y - uy * 6 * sc2, fH3.z + 2);
+    rig.cannon.rotation.set(0, 0, ang - Math.PI / 2);
+    const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : 0;
+    rig.cannonOrb.visible = st > 0.05;
+    if (st > 0.05) rig.cannonOrb.scale.setScalar(2 + st * 7 + Math.sin(performance.now() / 50) * 0.8);
+    rig.cannonGlowM.color.setRGB(0.37 + st * 0.6, 0.8 + st * 0.2, 1);
+  }
   if (rig.mirror) {
     rig.mirror.position.set(fH3.x + ux * 5, fH3.y + uy * 5, fH3.z + 2);
     rig.mirror.quaternion.setFromUnitVectors(UP, tmpA.set(ux, uy, 0));
@@ -328,6 +384,7 @@ function updateRig(rig, f, alpha, G) {
     rig.bubble.position.set(x, -(y - 45 * bq), 0);
     rig.bubble.scale.setScalar((20 + 34 * (f.shieldHP / G.PH.shieldMax)) * bq);
   }
+  updateRibbon(rig, f);
   // 影（真下にある床：すり抜け床かステージ）
   let gy = null;
   const bt = G.state.battle;
@@ -340,6 +397,31 @@ function updateRig(rig, f, alpha, G) {
     rig.shadow.scale.set(s, s * 0.6, 1);
     rig.shadow.material.opacity = 0.3 * s;
   }
+}
+// 残像の帯：軌跡の点をなめらかな曲線にして、新しいほど明るく太く
+const RIB_COL = { katana: [0.75, 0.9, 1], fire: [1, 0.55, 0.15], ice: [0.6, 0.95, 1], beam: [0.5, 0.85, 1], elec: [0.5, 0.9, 1] };
+function updateRibbon(rig, f) {
+  const t = f.trail;
+  if (!t || t.length < 2 || !t[0] || t[0].length < 4) return;
+  const N = rig.ribbonN, pos = rig.ribbon.geometry.attributes.position, col = rig.ribbon.geometry.attributes.color;
+  const m = f.state === 'move' ? f.move : null;
+  const c = RIB_COL[(m && m.elem) || (m && m.hits && m.hits.some(h => h.elec) ? 'elec' : f.c.weapon)] || [1, 1, 1];
+  const z = (f.depthZ || 0) + 14;
+  const cr = (a, b, c2, d, u, k) => 0.5 * (2 * b[k] + (-a[k] + c2[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c2[k] - d[k]) * u * u + (-a[k] + 3 * b[k] - 3 * c2[k] + d[k]) * u * u * u);
+  const L = t.length;
+  for (let i = 0; i < N; i++) {
+    const s = i / (N - 1) * (L - 1), j = Math.min(L - 2, Math.floor(s)), u = s - j;
+    const p0 = t[Math.max(0, j - 1)], p1 = t[j], p2 = t[j + 1], p3 = t[Math.min(L - 1, j + 2)];
+    const tx = cr(p0, p1, p2, p3, u, 0), ty = cr(p0, p1, p2, p3, u, 1), bx = cr(p0, p1, p2, p3, u, 2), by = cr(p0, p1, p2, p3, u, 3);
+    const a = i / (N - 1); // 0 = いちばん古い、1 = いま
+    const w = 0.25 + 0.75 * a; // 古いほど細い
+    pos.setXYZ(i * 2, tx, -ty, z); pos.setXYZ(i * 2 + 1, tx + (bx - tx) * w, -(ty + (by - ty) * w), z);
+    const k = a * a; // 古いほど暗い（＝透明）
+    col.setXYZ(i * 2, (0.5 + 0.5 * c[0]) * k, (0.5 + 0.5 * c[1]) * k, (0.5 + 0.5 * c[2]) * k); // 先は白っぽく
+    col.setXYZ(i * 2 + 1, c[0] * k * 0.35, c[1] * k * 0.35, c[2] * k * 0.35);
+  }
+  pos.needsUpdate = true; col.needsUpdate = true;
+  rig.ribbon.visible = true;
 }
 /* ---------- 飛び道具 ---------- */
 function projMesh(p) {
@@ -376,6 +458,16 @@ function projMesh(p) {
       const w = new THREE.Mesh(new THREE.TorusGeometry(10 + i * 4, 1.1, 4, 16, Math.PI * 1.3), wm);
       w.rotation.y = Math.PI / 2; w.position.x = -4 - i * 11; spin.add(w); m.userData.winds.push(w);
     }
+  } else if (p.type === 'beam') {
+    // ビーム：白い芯＋青い光（x方向に1の長さで作って、のびた分だけ横に伸ばす）
+    m = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    core.rotation.z = Math.PI / 2; m.add(core);
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16), new THREE.MeshBasicMaterial({ color: 0x3aa8ff, transparent: true, opacity: 0.6, depthWrite: false }));
+    glow.rotation.z = Math.PI / 2; m.add(glow);
+    const tipG = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.75, depthWrite: false }));
+    m.add(tipG);
+    m.userData = { core, glow, tipG, life0: p.life };
   } else if (p.type === 'shard') {
     // 氷のつぶて：とがった氷の結晶
     m = new THREE.Group();
@@ -449,7 +541,7 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     seen.add(f);
     updateRig(rig, f, alpha, G);
   }
-  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow); if (rig.mr) window.ModelRig.remove(rig.mr, scene); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); if (rig.wire) scene.remove(rig.wire, rig.hook, rig.field); rigs.delete(f); }
+  for (const [f, rig] of rigs) if (!seen.has(f)) { scene.remove(rig.g, rig.bubble, rig.shadow, rig.ribbon); if (rig.mr) window.ModelRig.remove(rig.mr, scene); if (rig.whip) rig.whip.forEach(s => scene.remove(s)); if (rig.wire) scene.remove(rig.wire, rig.hook, rig.field); rigs.delete(f); }
   // 飛び道具
   const live = new Set(b.projectiles);
   for (const p of b.projectiles) {
@@ -457,6 +549,12 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     const px = G.lerp(p.px, p.x, alpha), py = G.lerp(p.py, p.y, alpha);
     m.position.set(px, -py, 0);
     if (p.type === 'arrow' || p.type === 'bullet') m.rotation.set(0, 0, Math.atan2(-p.vy, p.vx));
+    else if (p.type === 'beam') {
+      const u = m.userData, L = Math.max(1, p.len), k = Math.min(1, p.life / 6); // 最後は細くなって消える
+      m.position.set(p.x + p.dir * L / 2, -p.y, 0);
+      u.core.scale.set(p.r * 0.3 * k, L, p.r * 0.3 * k); u.glow.scale.set(p.r * (1 + Math.sin(p.age * 1.3) * 0.1) * k, L, p.r * k);
+      u.tipG.position.set(-p.dir * L / 2, 0, 0); u.tipG.scale.setScalar(p.r * 1.6 * k);
+    }
     else if (p.type === 'shard') { m.rotation.set(p.age * 0.3, 0, Math.atan2(-p.vy, p.vx)); }
     else if (p.type === 'fireball') {
       m.userData.fl.forEach((fl, i) => { fl.scale.setScalar(p.r * (0.85 + i * 0.3) * (1 + Math.sin(p.age * 0.7 + i * 2) * 0.12)); fl.position.set(-i * p.r * 0.25, Math.sin(p.age * 0.5 + i) * 1.5, 0); });
@@ -490,7 +588,10 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
     else { m.position.y = 15; m.scale.y = 0.8 + Math.sin(p.age * 0.8) * 0.2; }
   }
   for (const [p, m] of projMeshes) if (!live.has(p)) { scene.remove(m); projMeshes.delete(p); }
-  renderer.render(scene, camera);
+  // 描画（ブルームあり／なし）。重い端末では自動でブルームを切る
+  const t0 = performance.now();
+  if (composer && R.bloomOn) composer.render(); else renderer.render(scene, camera);
+  perfWatch(performance.now() - t0);
   const W = view.w, H = view.h;
   return { X: wx => (wx - cam.x) * z + W / 2 + sx, Y: wy => (wy - cam.y) * z + H / 2 + sy, z };
 };

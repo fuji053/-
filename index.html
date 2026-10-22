@@ -109,6 +109,10 @@
   .res-name { font-size: 18px; font-weight: 800; }
   @keyframes resIn { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
   #rotate { z-index: 50; background: var(--bg); }
+  #trainBar { position: fixed; top: calc(env(safe-area-inset-top) + 6px); left: 50%; transform: translateX(-50%); display: none; gap: 5px; z-index: 6; }
+  #trainBar.show { display: flex; }
+  #trainBar .tb { font: 700 11px -apple-system, "Hiragino Sans", sans-serif; color: #fff; background: rgba(10,16,40,0.72); border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px; padding: 6px 8px; touch-action: manipulation; white-space: nowrap; }
   @media (orientation: portrait) { #rotate { display: flex; } }
 </style>
 </head>
@@ -136,13 +140,24 @@
     <div class="cards" id="cards"></div>
     <div class="lv-row opt-row">
       <span>ステージ</span><div class="stg" id="stages"></div>
-      <span style="margin-left:10px">CPUの強さ</span><div class="segs" id="cpuLevel"></div>
+      <span style="margin-left:10px">モード</span><div class="segs" id="gameMode"></div>
+      <span id="cpuLevelWrap" style="display:contents"><span style="margin-left:10px">CPUの強さ</span><div class="segs" id="cpuLevel"></div></span>
     </div>
     <div class="row" style="margin-top:8px">
       <button class="btn" id="btnBack">もどる</button>
       <button class="btn primary" id="btnFight">たたかう</button>
     </div>
   </div>
+</div>
+
+<!-- トレーニングの操作パネル（試合中、画面の上に出る） -->
+<div id="trainBar">
+  <button class="tb" id="trCpu">相手：止まる</button>
+  <button class="tb" id="trMinus">相手% −10</button>
+  <button class="tb" id="trPlus">相手% ＋10</button>
+  <button class="tb" id="trZero">0%に</button>
+  <button class="tb" id="trHit">当たり判定：オフ</button>
+  <button class="tb" id="trReset">位置リセット</button>
 </div>
 
 <!-- 一時停止 -->
@@ -176,6 +191,7 @@
 
 <script src="data.js"></script>
 <script src="three.min.js"></script>
+<script src="post.js"></script>
 <script src="GLTFLoader.js"></script>
 <script src="SkeletonUtils.js"></script>
 <script src="modelrig.js"></script>
