@@ -109,6 +109,16 @@
   .res-name { font-size: 18px; font-weight: 800; }
   @keyframes resIn { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
   #rotate { z-index: 50; background: var(--bg); }
+  #opening { position: fixed; inset: 0; z-index: 30; background: #000; display: none; cursor: pointer; }
+  #opening.show { display: block; }
+  #opening video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  #opTap { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 14px); text-align: center; font-weight: 800; letter-spacing: 0.2em;
+    font-size: 15px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.9); opacity: 0.55; animation: opPulse 1.6s ease-in-out infinite; pointer-events: none; }
+  #opening.ended #opTap { font-size: 18px; opacity: 1; bottom: calc(var(--sab) + 8px); }
+  @keyframes opPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+  #opening.ended #opTap { animation-duration: 1.1s; }
+  #opSound { position: absolute; top: calc(var(--sat) + 10px); right: calc(var(--sar) + 12px); font: 600 13px -apple-system, "Hiragino Sans", sans-serif;
+    color: #fff; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.35); border-radius: 18px; padding: 7px 12px; }
   #trainBar { position: fixed; top: calc(env(safe-area-inset-top) + 6px); left: 50%; transform: translateX(-50%); display: none; gap: 5px; z-index: 6; }
   #trainBar.show { display: flex; }
   #trainBar .tb { font: 700 11px -apple-system, "Hiragino Sans", sans-serif; color: #fff; background: rgba(10,16,40,0.72); border: 1px solid rgba(255,255,255,0.25);
@@ -121,7 +131,13 @@
 <div id="safe"></div>
 
 <!-- タイトル -->
-<div class="screen show" id="title">
+<!-- オープニング映像（タイトル） -->
+<div id="opening">
+  <video id="opVideo" src="op.mp4" poster="op_poster.jpg" playsinline webkit-playsinline preload="auto" muted></video>
+  <div id="opTap">タップしてスタート</div>
+  <button id="opSound" type="button">🔇 音を出して見る</button>
+</div>
+<div class="screen" id="title">
   <div class="box">
     <h1>バトル試作</h1>
     <p class="sub">仮のキャラで操作感と吹っ飛びを試す版です<br>iPhoneは横向き・低電力モードはオフで遊んでください</p>

@@ -58,6 +58,8 @@ const SFX = (() => {
   let musicVol = store.get('bgm', 1) ? 0.32 : 0;
   function unlock() {
     try {
+      // iPhoneのマナーモード（消音スイッチ）でも、ゲームの音が鳴るようにする（動画と同じあつかい）
+      if (navigator.audioSession && navigator.audioSession.type !== 'playback') { try { navigator.audioSession.type = 'playback'; } catch (e) { /* 古いiOSは非対応 */ } }
       if (!ac) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return;
@@ -3684,12 +3686,33 @@ const state = {
   showFps: store.get('showFps', false), gameMode: store.get('gameMode', 'vs'), mode: '3d', level: store.get('cpuLevel', D.cpu.default), stage: store.get('stage', 0),
 };
 function show(id) {
-  for (const s of ['title', 'select', 'pause', 'result']) $(s).classList.toggle('show', s === id);
+  // タイトル＝オープニング映像（映像が使えないときだけ、文字のタイトル画面）
+  const useOP = id === 'title' && OP.usable();
+  for (const s of ['title', 'select', 'pause', 'result']) $(s).classList.toggle('show', s === id && !useOP);
+  if (useOP) OP.play(); else OP.hide();
   // トレーニングの操作パネル：トレーニングの試合中だけ出す
   $('trainBar').classList.toggle('show', !id && !!(state.battle && state.battle.training));
   if (state.battle && state.battle.training) updateTrainBar();
-  if ((id === 'title' || id === 'select') && window.Music) window.Music.play('menu');
+  if (window.Music) { if (useOP) window.Music.stop(); else if (id === 'title' || id === 'select') window.Music.play('menu'); }
 }
+/* ---------- オープニング映像（タップでキャラ選択へ） ---------- */
+const OP = {
+  ok: true,
+  usable() { const v = $('opVideo'); if (!v || v.error) this.ok = false; return this.ok; },
+  play() {
+    const el = $('opening'), v = $('opVideo');
+    if (!el || !v) { this.ok = false; return; }
+    el.classList.add('show'); el.classList.remove('ended');
+    try { v.currentTime = 0; } catch (e) { /* 読みこみ前 */ }
+    v.muted = !SFX.ready; // 一度でも画面をさわる前は、音なしでしか自動再生できない（iPhoneの決まり）
+    const pr = v.play();
+    if (pr && pr.catch) pr.catch(() => { v.muted = true; v.play().catch(() => {}); this.syncSound(); });
+    this.syncSound();
+  },
+  hide() { const el = $('opening'), v = $('opVideo'); if (el) el.classList.remove('show'); if (v && !v.paused) v.pause(); },
+  syncSound() { const b = $('opSound'); if (b) b.style.display = $('opVideo').muted ? '' : 'none'; },
+  toSelect() { this.hide(); state.picking = 'p1'; buildCards(); show('select'); state.screen = 'select'; },
+};
 function buildCards() {
   // 1つの画面から選ぶ：上の「あなた」「CPU」で、どちらのキャラを選ぶか切りかえる
   if (!state.picking) state.picking = 'p1';
@@ -3786,6 +3809,12 @@ function init3D() {
   } catch (e) { state.mode = '2d'; }
 }
 $('btnStart').addEventListener('click', () => { state.picking = 'p1'; buildCards(); show('select'); state.screen = 'select'; });
+// オープニング：どこをタップしてもキャラ選択へ。「音を出す」は最初から音つきで見直す
+$('opening').addEventListener('click', () => { SFX.play('count'); OP.toSelect(); });
+$('opSound').addEventListener('click', e => { e.stopPropagation(); const v = $('opVideo'); v.muted = false; try { v.currentTime = 0; } catch (er) { /* 無視 */ } $('opening').classList.remove('ended'); v.play().catch(() => {}); OP.syncSound(); });
+$('opVideo').addEventListener('ended', () => $('opening').classList.add('ended'));
+$('opVideo').addEventListener('error', () => { OP.ok = false; if (state.screen === 'title') show('title'); }); // 映像がないときは文字のタイトル
+show('title');
 $('btnBack').addEventListener('click', () => { show('title'); state.screen = 'title'; });
 $('btnFight').addEventListener('click', startBattle);
 // トレーニングの操作パネル
