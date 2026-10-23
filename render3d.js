@@ -162,6 +162,86 @@ function makeRig(f) {
     rig.cannonOrb = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.8, depthWrite: false }));
     rig.cannonOrb.position.y = 19; rig.cannonOrb.visible = false; rig.cannon.add(rig.cannonOrb);
     mats.push(wm);
+  } else if (w === 'shield') {
+    // 盾（奥の腕）：白い凧形の盾に金のふちと青く光る紋章。片手剣（手前の手）
+    const sc = f.look.scale || 1;
+    rig.kshield = new THREE.Group(); g.add(rig.kshield);
+    const ks = new THREE.Shape();
+    ks.moveTo(0, 17); ks.quadraticCurveTo(13, 16, 13, 4); ks.quadraticCurveTo(11, -11, 0, -22); ks.quadraticCurveTo(-11, -11, -13, 4); ks.quadraticCurveTo(-13, 16, 0, 17);
+    rig.kshieldMat = new THREE.MeshStandardMaterial({ color: 0xeceae4, metalness: 0.45, roughness: 0.32, emissive: 0x000000 });
+    const goldM = new THREE.MeshStandardMaterial({ color: 0xd9a441, metalness: 0.8, roughness: 0.3 });
+    const plate = new THREE.Mesh(new THREE.ExtrudeGeometry(ks, { depth: 1.6, bevelEnabled: true, bevelThickness: 0.9, bevelSize: 1.4, bevelSegments: 2, curveSegments: 10 }), [rig.kshieldMat, goldM]);
+    const inner = new THREE.Group(); inner.add(plate); rig.kshield.add(inner); rig.kshieldInner = inner;
+    rig.kshieldGlow = new THREE.MeshBasicMaterial({ color: 0x6fc4ff });
+    const em = new THREE.Mesh(new THREE.TorusGeometry(5.2, 1.1, 8, 20), rig.kshieldGlow); em.position.z = 2.9; inner.add(em);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(2.6, 16), rig.kshieldGlow); core.position.z = 3; inner.add(core);
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(1.6, 26, 0.8), goldM); crossV.position.set(0, -2, 2.8); inner.add(crossV);
+    rig.kshield.scale.setScalar(sc);
+    // 片手剣
+    const L = 34 * sc;
+    rig.ksword = new THREE.Group(); g.add(rig.ksword);
+    const bm = new THREE.MeshStandardMaterial({ color: 0xe9eef6, metalness: 0.65, roughness: 0.22 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(2.6, L, 0.9), bm); blade.position.y = L / 2 + 2; rig.ksword.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(1.85, 5, 4), bm); tip.position.y = L + 4.5; tip.rotation.y = Math.PI / 4; tip.scale.z = 0.35; rig.ksword.add(tip);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(10, 1.6, 2), goldM); guard.position.y = 1.5; rig.ksword.add(guard);
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 7, 8), new THREE.MeshStandardMaterial({ color: 0x1d2a4a, roughness: 0.7 })); hilt.position.y = -2.5; rig.ksword.add(hilt);
+    const pom = new THREE.Mesh(SPH, goldM); pom.scale.setScalar(1.7); pom.position.y = -6.5; rig.ksword.add(pom);
+    mats.push(rig.kshieldMat, goldM, bm);
+  } else if (w === 'gsword') {
+    // 大剣：黒い刃に青く光る筋。長いつか
+    const sc = f.look.scale || 1, L = 66 * sc;
+    rig.gsword = new THREE.Group(); g.add(rig.gsword);
+    const bm = new THREE.MeshStandardMaterial({ color: 0x2a2e38, metalness: 0.7, roughness: 0.3, emissive: 0x000000 });
+    const edgeM = new THREE.MeshStandardMaterial({ color: 0xcfd8e8, metalness: 0.8, roughness: 0.2 });
+    rig.gswordGlow = new THREE.MeshBasicMaterial({ color: 0x3f8fff });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(7.5 * sc, L, 1.3), bm); blade.position.y = L / 2 + 3; rig.gsword.add(blade);
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.9, L, 1.5), edgeM); e.position.set(sx * 3.9 * sc, L / 2 + 3, 0); rig.gsword.add(e); }
+    const line = new THREE.Mesh(new THREE.BoxGeometry(1.1, L * 0.82, 1.6), rig.gswordGlow); line.position.y = L * 0.45 + 3; rig.gsword.add(line);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(4.3 * sc, 9, 4), bm); tip.position.y = L + 7.5; tip.rotation.y = Math.PI / 4; tip.scale.z = 0.2; rig.gsword.add(tip);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(15 * sc, 2.6, 3.4), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, metalness: 0.7, roughness: 0.35 })); guard.position.y = 2.2; rig.gsword.add(guard);
+    const hilt = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 13, 8), new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 })); hilt.position.y = -4.5; rig.gsword.add(hilt);
+    rig.gswordMat = bm;
+    mats.push(bm, edgeM);
+  } else if (w === 'skate') {
+    // ローラーブレード：足の下に4つの車輪（青く光る）
+    rig.skates = [];
+    const fm = new THREE.MeshStandardMaterial({ color: 0x1b1d24, metalness: 0.4, roughness: 0.4 });
+    rig.wheelM = new THREE.MeshStandardMaterial({ color: 0x1e3a66, emissive: 0x0d4f9a, roughness: 0.35 });
+    for (let k = 0; k < 2; k++) {
+      const sk = new THREE.Group(); g.add(sk); rig.skates.push(sk);
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 8), new THREE.MeshStandardMaterial({ color: 0xf2f2f4, roughness: 0.5 })); boot.position.set(1, 5.2, 0); sk.add(boot);
+      const cuff = new THREE.Mesh(new THREE.BoxGeometry(7.5, 6, 8.5), fm); cuff.position.set(-2.6, 9.6, 0); sk.add(cuff);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(13, 1.4, 2.4), fm); frame.position.y = 1.2; sk.add(frame);
+      for (let i = 0; i < 4; i++) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 2.2, 12), rig.wheelM); wh.rotation.x = Math.PI / 2; wh.position.set(-4.8 + i * 3.4, -0.6, 0); sk.add(wh); }
+    }
+    mats.push(fm, rig.wheelM);
+  } else if (w === 'chain') {
+    // 鎖鎌：手前の手に鎌。鎖（ワイヤー）と分銅は技の間だけ
+    const sc = f.look.scale || 1;
+    rig.sickle = new THREE.Group(); g.add(rig.sickle);
+    const hm = new THREE.MeshStandardMaterial({ color: 0x2a1c18, roughness: 0.8 });
+    const bm = new THREE.MeshStandardMaterial({ color: 0xc9ced8, metalness: 0.75, roughness: 0.22, emissive: 0x000000 });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 16 * sc, 8), hm); handle.position.y = 6 * sc; rig.sickle.add(handle);
+    const blade = new THREE.Mesh(new THREE.TorusGeometry(8 * sc, 1.1, 6, 16, Math.PI * 0.75), bm);
+    blade.position.set(-8 * sc, 14 * sc, 0); blade.rotation.z = -0.2; rig.sickle.add(blade);
+    const redM = new THREE.MeshStandardMaterial({ color: 0xc0182a, emissive: 0x400008, roughness: 0.4 });
+    const edge = new THREE.Mesh(new THREE.TorusGeometry(8.6 * sc, 0.45, 4, 16, Math.PI * 0.6), redM); edge.position.copy(blade.position); edge.rotation.z = -0.15; rig.sickle.add(edge);
+    rig.sickleMat = bm;
+    const cm = new THREE.MeshStandardMaterial({ color: 0x3a3d45, metalness: 0.7, roughness: 0.35 });
+    rig.wire = new THREE.Mesh(CYL, cm); rig.wire.userData.r = 1.0; rig.wire.visible = false; scene.add(rig.wire);
+    rig.hook = new THREE.Mesh(new THREE.OctahedronGeometry(4.2), new THREE.MeshStandardMaterial({ color: 0x2a2d33, metalness: 0.8, roughness: 0.3, emissive: 0x300006 })); rig.hook.visible = false; scene.add(rig.hook);
+    mats.push(bm, hm, redM);
+  } else if (w === 'tako') {
+    // タコ：頭にクラゲのような大きなかさ、下に8本の触手（ゆらゆら）
+    const sc = f.look.scale || 1;
+    rig.takoM = new THREE.MeshStandardMaterial({ color: 0xb04fe8, emissive: 0x2a0a40, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.92 });
+    const hatM = new THREE.MeshStandardMaterial({ color: 0x7f5cff, emissive: 0x1a1050, roughness: 0.2, transparent: true, opacity: 0.85 });
+    rig.hat = new THREE.Mesh(new THREE.SphereGeometry(16 * sc, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hatM); g.add(rig.hat);
+    const phoneM = new THREE.MeshStandardMaterial({ color: 0xffa040, emissive: 0x803000, roughness: 0.3 });
+    rig.phones = []; for (const sz of [-1, 1]) { const ph = new THREE.Mesh(new THREE.TorusGeometry(4.2 * sc, 1.6 * sc, 8, 16), phoneM); g.add(ph); rig.phones.push([ph, sz]); }
+    rig.tents = [];
+    for (let i = 0; i < 8; i++) { const segs = []; for (let k = 0; k < 5; k++) { const sgm = new THREE.Mesh(CYL, rig.takoM); sgm.userData.r = (2.6 - k * 0.4) * sc; g.add(sgm); segs.push(sgm); } rig.tents.push(segs); }
+    mats.push(rig.takoM, hatM, phoneM);
   } else if (w === 'mirror') {
     rig.shieldMat = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.15, metalness: 0.85, emissive: 0x000000 });
     rig.mirror = new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 5, 28), rig.shieldMat); g.add(rig.mirror);
@@ -169,7 +249,11 @@ function makeRig(f) {
     rig.mirror.add(rimM); rimM.rotation.x = Math.PI / 2;
     mats.push(rig.shieldMat);
   }
-  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades, rig.twirl, rig.cannon].filter(Boolean));
+  rig.weaponParts = new Set([rig.bow, rig.str1, rig.str2, rig.arrow, rig.glow, rig.mirror, rig.katana, rig.gun, rig.shades, rig.twirl, rig.cannon, rig.kshield, rig.ksword, rig.gsword, rig.sickle, rig.hat, ...(rig.skates || []), ...(rig.phones || []).map(p => p[0]), ...(rig.tents || []).flat()].filter(Boolean));
+  // 反射の光（タコの泡のバリア）
+  if (!rig.field && f.c.weapon === 'tako') { rig.field = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.25, depthWrite: false })); rig.field.visible = false; scene.add(rig.field); }
+  // 泡に閉じこめられたときの泡
+  rig.trap = new THREE.Mesh(SPH, new THREE.MeshStandardMaterial({ color: 0xcff6ff, emissive: 0x2a6f9f, transparent: true, opacity: 0.32, roughness: 0.05, depthWrite: false })); rig.trap.visible = false; scene.add(rig.trap);
   // 3Dモデルがあるキャラは読み込みを始める（読み込めるまでは仮の体で表示）
   if (f.c.model && window.ModelRig) rig.modelEntry = window.ModelRig.load(f.c.model);
   const m2 = f.c.model2 || (f.c.form2 && f.c.form2.model); // ％が高くなったとき／下Bで切りかえたときの姿
@@ -207,7 +291,9 @@ function updateRig(rig, f, alpha, G) {
   g.visible = f.alive;
   rig.shadow.visible = false; rig.bubble.visible = false; rig.ribbon.visible = false;
   if (rig.whip) for (const s of rig.whip) s.visible = f.alive;
-  if (rig.wire) { rig.wire.visible = rig.hook.visible = false; rig.field.visible = false; }
+  if (rig.wire) { rig.wire.visible = rig.hook.visible = false; }
+  if (rig.field) rig.field.visible = false;
+  rig.trap.visible = false;
   if (!f.alive || f.hidden) { g.visible = false; if (rig.mr) rig.mr.holder.visible = false; return; } // 瞬歩で消えている間も見えない
   const pose = G.interpPose(f, alpha);
   const pts = G.solvePose(pose, f.look, f.grounded, f.state === 'down');
@@ -340,6 +426,70 @@ function updateRig(rig, f, alpha, G) {
     if (st > 0.05) rig.cannonOrb.scale.setScalar(2 + st * 7 + Math.sin(performance.now() / 50) * 0.8);
     rig.cannonGlowM.color.setRGB(0.37 + st * 0.6, 0.8 + st * 0.2, 1);
   }
+  if (rig.sickle) {
+    const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
+    rig.sickle.position.set(fH3.x, fH3.y, fH3.z + 1);
+    rig.sickle.rotation.set(0, 0, ang - Math.PI / 2);
+    const act = f.state === 'move' && f.activeF >= 0 && f.move.hits && f.activeHits().length > 0;
+    rig.sickleMat.emissive.setHex(act ? 0x501018 : 0x000000);
+    // 鎖の長さで、鎖の太さと分銅の大きさが変わる（長い＝細い、短い＝太い）
+    const ck = [0.7, 1, 1.5][f.chainMode || 0];
+    rig.wire.userData.r = ck; rig.hook.scale.setScalar(ck);
+  }
+  if (rig.hat) {
+    // かさ：頭の上。触手：かさのふちから下へ、ゆらゆら（動いた方向と逆に流れる）
+    const sc = f.look.scale || 1, hd = P.head || V(pts.head, 0), t = performance.now() / 1000;
+    rig.hat.position.set(hd.x, hd.y + 4 * sc, 0);
+    rig.phones.forEach(([ph, sz]) => { ph.position.set(hd.x, hd.y - 2 * sc, sz * 12 * sc); });
+    const drag = G.clamp(-(f.vx || 0) * 0.08, -0.6, 0.6), up = G.clamp((f.vy || 0) * 0.04, -0.5, 0.5);
+    rig.tents.forEach((segs, i) => {
+      const a = i / 8 * Math.PI * 2, rx = Math.cos(a) * 13 * sc, rz = Math.sin(a) * 13 * sc;
+      let px = hd.x + rx, py = hd.y - 2 * sc, pz = rz;
+      segs.forEach((sg, k) => {
+        const L = 7 * sc, sw = Math.sin(t * 3 + i * 0.9 + k * 0.7) * 0.35 + drag, out = 0.25 + k * 0.08;
+        const nx = px + (Math.cos(a) * out + sw) * L, ny = py - L * (1 - up * 0.5), nz = pz + Math.sin(a) * out * L;
+        setSeg(sg, new THREE.Vector3(px, py, pz), new THREE.Vector3(nx, ny, nz)); px = nx; py = ny; pz = nz;
+      });
+    });
+  }
+  if (rig.kshield) {
+    // 盾は奥の前腕の外側。面は「前＋手前（カメラ側）」へななめに向ける
+    const bE3 = rig.mr ? window.ModelRig.handInfo(rig.mr).bE : P.bE;
+    const bdx = bH3.x - bE3.x, bdy = bH3.y - bE3.y, bl = Math.hypot(bdx, bdy) || 1;
+    rig.kshield.position.set(bE3.x + bdx * 0.55, bE3.y + bdy * 0.55, (bE3.z + bH3.z) / 2 + 5);
+    rig.kshield.rotation.set(0, 0.95, Math.atan2(bdy / bl, bdx / bl) - Math.PI / 2);
+    const thrown = G.state.battle && G.state.battle.projectiles.some(p => p.maker === f && p.type === 'disc' && !p.dead);
+    rig.kshield.visible = !thrown;
+    const ref = !!f.activeWindow('reflect');
+    rig.kshieldMat.emissive.setHex(ref ? 0x2f6f9f : 0x000000);
+    rig.kshieldGlow.color.setHex(ref || (f.charging && f.move && f.move.key.startsWith('nspecial')) ? 0xd8f4ff : 0x6fc4ff);
+  }
+  if (rig.ksword) {
+    const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
+    rig.ksword.position.set(fH3.x, fH3.y, fH3.z + 1);
+    rig.ksword.rotation.set(0, 0, ang - Math.PI / 2);
+  }
+  if (rig.gsword) {
+    const ang = Math.atan2(uy, ux) + (pose.wr || 0) * Math.PI / 180;
+    rig.gsword.position.set(fH3.x, fH3.y, fH3.z + 1);
+    rig.gsword.rotation.set(0, 0, ang - Math.PI / 2);
+    const act = f.state === 'move' && f.activeF >= 0 && f.move.hits && f.activeHits().length > 0;
+    const ch = f.charging ? Math.min(1, (f.chargeT || 0) / 60) : 0;
+    rig.gswordMat.emissive.setRGB(0.05 * ch + (act ? 0.08 : 0), 0.12 * ch + (act ? 0.15 : 0), 0.35 * ch + (act ? 0.3 : 0));
+    rig.gswordGlow.color.setRGB(0.25 + ch * 0.6, 0.56 + ch * 0.4, 1);
+  }
+  if (rig.skates) {
+    const feet = [[P.fK, P.fF], [P.bK, P.bF]];
+    rig.fFt.visible = rig.bFt.visible = false;
+    rig.skates.forEach((sk, k) => {
+      const [kn, an] = feet[k];
+      const a = Math.atan2(an.y - kn.y, an.x - kn.x) + Math.PI / 2;
+      sk.position.set(an.x + Math.cos(a) * rig.th * 0.6 - Math.sin(a) * 4, an.y + Math.sin(a) * rig.th * 0.6 + Math.cos(a) * 4, an.z);
+      sk.rotation.set(0, 0, a);
+    });
+    const fast = Math.abs(f.vx) > 6;
+    rig.wheelM.emissive.setHex(fast ? 0x3fb0ff : 0x0d4f9a);
+  }
   if (rig.mirror) {
     rig.mirror.position.set(fH3.x + ux * 5, fH3.y + uy * 5, fH3.z + 2);
     rig.mirror.quaternion.setFromUnitVectors(UP, tmpA.set(ux, uy, 0));
@@ -374,7 +524,7 @@ function updateRig(rig, f, alpha, G) {
       rig.field.visible = true;
       rig.field.position.set(x + rw.x * f.facing, -(y - rw.y), 10);
       const s = rw.r * (0.92 + Math.sin(performance.now() / 60) * 0.06);
-      rig.field.scale.set(s, 2, s);
+      if (f.c.weapon === 'tako') rig.field.scale.setScalar(s); else rig.field.scale.set(s, 2, s);
     }
   }
   // シールド
@@ -382,7 +532,14 @@ function updateRig(rig, f, alpha, G) {
     rig.bubble.visible = true;
     const bq = f.look.quad ? 0.62 : 1; // 4本足（小さい猫）はシールドも小さく低い
     rig.bubble.position.set(x, -(y - 45 * bq), 0);
-    rig.bubble.scale.setScalar((20 + 34 * (f.shieldHP / G.PH.shieldMax)) * bq);
+    rig.bubble.scale.setScalar((20 + 34 * (f.shieldHP / f.shMax)) * bq * Math.sqrt(f.s.shieldMul || 1));
+  }
+  // 泡に閉じこめられている
+  if (f.bubble > 0 && f.state === 'dizzy') {
+    const sc = f.look.scale || 1, wob = Math.sin(performance.now() / 140) * 0.05;
+    rig.trap.visible = true; rig.trap.position.set(x, -(y - 48 * sc), 0);
+    rig.trap.scale.set(52 * sc * (1 + wob), 56 * sc * (1 - wob), 52 * sc);
+    rig.trap.material.opacity = f.bubble === 1 ? 0.22 : 0.34; // 1回攻撃されると薄くなる（あと1回で割れる）
   }
   updateRibbon(rig, f);
   // 影（真下にある床：すり抜け床かステージ）
@@ -399,7 +556,7 @@ function updateRig(rig, f, alpha, G) {
   }
 }
 // 残像の帯：軌跡の点をなめらかな曲線にして、新しいほど明るく太く
-const RIB_COL = { katana: [0.75, 0.9, 1], fire: [1, 0.55, 0.15], ice: [0.6, 0.95, 1], beam: [0.5, 0.85, 1], elec: [0.5, 0.9, 1] };
+const RIB_COL = { katana: [0.75, 0.9, 1], gsword: [0.45, 0.7, 1], shield: [0.85, 0.92, 1], skate: [0.6, 0.95, 1], fire: [1, 0.55, 0.15], ice: [0.6, 0.95, 1], beam: [0.5, 0.85, 1], elec: [0.5, 0.9, 1] };
 function updateRibbon(rig, f) {
   const t = f.trail;
   if (!t || t.length < 2 || !t[0] || t[0].length < 4) return;
@@ -492,6 +649,12 @@ function projMesh(p) {
     b.rotation.z = Math.PI / 2; m.add(b);
     const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: p.big ? 0.45 : 0.25, depthWrite: false }));
     gl.scale.set(p.big ? 16 : 9, p.big ? 6 : 3.5, p.big ? 6 : 3.5); m.add(gl);
+  } else if (p.type === 'bubble') {
+    // 泡：すきとおった球と、光の点
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(SPH, new THREE.MeshStandardMaterial({ color: 0xcff6ff, emissive: 0x2a6f9f, transparent: true, opacity: 0.45, roughness: 0.05, depthWrite: false })));
+    m.children[0].scale.setScalar(p.r);
+    const hl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffffff })); hl.scale.setScalar(p.r * 0.18); hl.position.set(-p.r * 0.35, p.r * 0.4, p.r * 0.6); m.add(hl);
   } else if (p.type === 'wave') {
     // 三日月の斬撃
     m = new THREE.Mesh(new THREE.TorusGeometry(p.r, 3, 6, 18, Math.PI * 0.85), new THREE.MeshBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.8, depthWrite: false }));

@@ -70,7 +70,14 @@
   .pick.cpu.on { border-color: var(--cpu); box-shadow: 0 0 10px rgba(79,168,255,0.45); }
   .cards { display: flex; gap: 10px; justify-content: safe center; overflow-x: auto; max-width: 100%; padding: 2px 4px 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .cards::-webkit-scrollbar { display: none; }
-  .cards .card { flex: 0 0 auto; width: min(108px, calc((100vw - 90px) / 5)); }
+  .cards .card { flex: 0 0 auto; width: max(66px, min(108px, calc((100% - 10px - (var(--n, 6) - 1) * 6px) / var(--n, 6)))); font-size: 12.5px; }
+  .cards .card small { font-size: 9.5px; }
+  .cards { gap: 6px; }
+  /* キャラが多いとき（9人より多い）：2段にならべて、顔の部分だけ見せる小さめのカード */
+  .cards.many { flex-wrap: wrap; overflow-x: visible; row-gap: 6px; }
+  .cards.many .card { width: calc((100% - 10px - 5 * 6px) / 6); font-size: 12px; padding-bottom: 3px; }
+  .cards.many .card img { aspect-ratio: 2 / 1.05; object-position: center 22%; margin-bottom: 2px; }
+  .cards.many .card small { display: none; }
   .card {
     border: 2px solid var(--line); border-radius: 12px; padding: 0 0 6px; background: #151c3b; overflow: hidden;
     font-size: 14px; font-weight: 700; touch-action: manipulation; line-height: 1.25; position: relative;
