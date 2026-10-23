@@ -1368,8 +1368,10 @@ class Fighter {
     const mode = this.chainMode || 0, md = this.c.chainModes[mode];
     m._ch = m._ch || {};
     return m._ch[mode] || (m._ch[mode] = m.hits.map(h => {
-      const ax = Math.abs(h.x);
-      return Object.assign({}, h, { x: ax <= 30 ? h.x : Math.sign(h.x) * (30 + (ax - 30) * md.reach), dmg: h.dmg !== undefined ? +(h.dmg * md.dmg).toFixed(2) : h.dmg });
+      const ax = Math.abs(h.x), dmg = h.dmg !== undefined ? +(h.dmg * md.dmg).toFixed(2) : h.dmg;
+      // 体のまわりを回る鎖（ring = 回る中心の高さ）：中心からの距離ごと伸び縮みする
+      if (h.ring !== undefined) return Object.assign({}, h, { x: h.x * md.reach, y: h.ring + (h.y - h.ring) * md.reach, dmg });
+      return Object.assign({}, h, { x: ax <= 30 ? h.x : Math.sign(h.x) * (30 + (ax - 30) * md.reach), dmg });
     }));
   }
   activeWindow(kind) {
@@ -1827,7 +1829,12 @@ class Fighter {
     if (m && m.wire) {
       const f = this.activeF >= 0 ? this.activeF : 0, [w0, w1] = m.wire;
       let tx, ty;
-      if (m.wireTip) { [tx, ty] = (m.aim && this.aimA && this.aimTip) ? this.aimTip : m.wireTip; }
+      if (m.wireSpin) {
+        // 鎖をぐるぐる振り回す：分銅が体のまわりを回る
+        const k = this.c.chainModes ? this.c.chainModes[this.chainMode || 0].reach : 1, a = f * m.wireSpin.speed;
+        tx = Math.cos(a) * m.wireSpin.r * k; ty = m.wireSpin.y + Math.sin(a) * m.wireSpin.r * k;
+      }
+      else if (m.wireTip) { [tx, ty] = (m.aim && this.aimA && this.aimTip) ? this.aimTip : m.wireTip; }
       else { const hs = this.c.chainModes ? this.chainHits(m) : m.hits; const far = hs.reduce((a, h) => (Math.abs(h.x) > Math.abs(a.x) ? h : a), hs[0]); tx = far.x; ty = far.y; }
       if (!this.wireOn) { this.wireOn = true; this.tip = this.hand.slice(); SFX.play('wire'); }
       // 出る（4コマ）→ 止まる → 戻る（6コマ）
@@ -2236,6 +2243,8 @@ class CpuBrain {
       const want = adx > 170 ? 0 : adx > 95 ? 1 : 2;
       if ((me.chainMode || 0) !== want) { p.my = -1; p.press('B'); return; }
     }
+    // 鎖旋風（NB）：近くや上に相手がいるときに、まわりをまとめて攻撃
+    if (me.c.chainModes && adx < 120 && Math.abs(dy) < 150 && me.state !== 'move' && rnd() < 0.05) { p.mx = 0; p.my = 0; p.press('B'); if (rnd() < 0.4) this.plan = { type: 'holdB', t: 20 }; return; }
     // ためられる必殺技（大剣・盾）：近くでスキがある相手に、ためて当てる
     const nCh = me.moves.nspecial && me.moves.nspecial.charge;
     if (nCh && me.grounded && adx < 110 && Math.abs(dy) < 50 && (['land', 'down', 'helpless', 'shieldstun', 'dizzy'].includes(op.state) || rnd() < 0.03)) {
