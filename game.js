@@ -3810,7 +3810,16 @@ function init3D() {
 }
 $('btnStart').addEventListener('click', () => { state.picking = 'p1'; buildCards(); show('select'); state.screen = 'select'; });
 // オープニング：どこをタップしてもキャラ選択へ。「音を出す」は最初から音つきで見直す
-$('opening').addEventListener('click', () => { SFX.play('count'); OP.toSelect(); });
+// 画面いっぱいに表示（全画面にできる端末だけ。iPhoneのSafariはできないので、ホーム画面から開いてもらう）
+function goFullscreen() {
+  const d = document.documentElement, fs = d.requestFullscreen || d.webkitRequestFullscreen;
+  if (fs && !(document.fullscreenElement || document.webkitFullscreenElement)) { try { const r = fs.call(d, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* できない端末 */ } }
+}
+$('opening').addEventListener('click', () => { goFullscreen(); SFX.play('count'); OP.toSelect(); });
+// iPhoneのSafariで開いているときだけ、「ホーム画面に追加」の案内を出す（ホーム画面から開くと、上のアドレスバーが消える）
+{ const ios = /iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+  if (ios && !standalone && $('opHint')) $('opHint').style.display = ''; }
 $('opSound').addEventListener('click', e => { e.stopPropagation(); const v = $('opVideo'); v.muted = false; try { v.currentTime = 0; } catch (er) { /* 無視 */ } $('opening').classList.remove('ended'); v.play().catch(() => {}); OP.syncSound(); });
 $('opVideo').addEventListener('ended', () => $('opening').classList.add('ended'));
 $('opVideo').addEventListener('error', () => { OP.ok = false; if (state.screen === 'title') show('title'); }); // 映像がないときは文字のタイトル

@@ -1,11 +1,11 @@
 {
-  "name": "バトル試作",
-  "short_name": "バトル試作",
+  "name": "ULT THE ULTIMATE FIGHTERS",
+  "short_name": "ULT",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#0b1022",
+  "background_color": "#000000",
   "theme_color": "#0b1022",
   "icons": [
     { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
