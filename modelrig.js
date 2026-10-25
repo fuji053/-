@@ -88,7 +88,7 @@ MR.build = function (entry, f, scene) {
   // 大きさ：モデルの脚の長さを、ゲームの脚の長さ（47 × キャラの大きさ）に合わせる
   const wp = o => o.getWorldPosition(new V3());
   const legLen = wp(bones.rUp).distanceTo(wp(bones.rLeg)) + wp(bones.rLeg).distanceTo(wp(bones.rFoot));
-  const sc = 47 * ((f.look && f.look.scale) || 1) / legLen;
+  const sc = 47 * ((f.look && f.look.scale) || 1) / legLen * ((f.look && f.look.modelScale) || 1); // modelScale：脚が短いちびキャラなどの見た目の大きさ調整
   inner.scale.setScalar(sc);
   holder.updateMatrixWorld(true);
   // 立ち姿勢（骨の初期状態）を記録
@@ -360,7 +360,7 @@ function mocapFor(f) {
     case 'walk': return { name: 'walk', t: loop(f.walkClock || 0, 'walk'), hy: true };
     case 'squat': return { name: 'jump', t: 0.1 + 0.14 * cl01(f.stateT / 4), hy: true };
     case 'air': {
-      if (f.flipT < 24) return null; // 空中ジャンプの宙返りは今の動き
+      if (f.flipT < (f.djDur || 24)) return null; // 空中ジャンプはキャラごとの動き
       return { name: 'jump', t: 0.31 + 0.19 * cl01((f.vy + 12) / 18), hy: false };
     }
     case 'land': return { name: 'jump', t: 0.6 + 0.12 * cl01(f.stateT / 10), hy: true };

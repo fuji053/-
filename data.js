@@ -41,6 +41,10 @@
      weight: 重さ（重いほど飛びにくい） / walk・run: 歩く・走る速さ / air: 空中の横移動の速さ
      jump・djump: ジャンプ・2段ジャンプの強さ / gravity: 落ちる加速 / fall: 落下の最高速度
      dmgMul: 全技のダメージ倍率 / kbMul: 全技の吹っ飛ばし倍率 / speed: 技の速さ倍率（1.1 = 1割速い）
+     airJumps: 空中で跳べる回数（着地するまで戻らない） / hitScale: 技の当たる範囲の倍率（キャラの「大きさ」の数値。見た目は look の scale）
+     grab: つかみの性能 { f: 出る速さ（コマ）, reach: 届く距離, dur: 外したときを含めた全体のコマ }
+     moveSpeed・moveDmg: 技ごとの速さ・攻撃力の倍率 { 技の名前: 倍率 } / aerialDmg: 空中技の攻撃力の倍率 / armorMoves: 出だしにアーマーがつく技の一覧 / hitScaleY: 技の高さだけ別の倍率にする
+     landMul: 空中技のあと着地したときのスキの倍率 / runUp: 走り出してトップスピードになるまでのコマ / turn: 走りながら振り向くのにかかるコマ
    ===================================================================== */
 
 window.GAME_DATA = {
@@ -68,7 +72,7 @@ window.GAME_DATA = {
     attack: 1.15,   // 技の出る速さとスキの短さ（1.15 = 15%速い）
     run: 1.2,       // ダッシュの速さと、走り出しの速さ
     air: 1.1,       // 空中で横に動く速さ
-    fall: 1.1,      // 落ちる速さ（ジャンプの高さは変わらないように調整します）
+    fall: 0.92,     // 落ちる速さ（小さいほどふわっと長く飛ぶ。ジャンプの高さは変わらないように調整します）
     landLag: 0.75,  // 着地のスキ（0.75 = 25%短い）
   },
 
@@ -123,12 +127,13 @@ window.GAME_DATA = {
   },
 
   /* ---------- CPUの強さ（キャラ選択画面で選べます） ---------- */
+  /* CPU：read＝読み合いのうまさ（ガード・回避・スキへの反撃・ため技のキャンセル）。キャラごとの cpu.nt（立ち回り 1〜10）をかけて使う */
   cpu: {
     default: 'normal',
     levels: {
-      weak:   { name: '弱い',   reaction: 22, aggression: 0.35, shieldChance: 0.08, mistake: 0.35, techChance: 0.1, combo: 0.0, parryChance: 0.0, diSkill: 0.0 },
-      normal: { name: 'ふつう', reaction: 10, aggression: 0.6,  shieldChance: 0.22, mistake: 0.12, techChance: 0.45, combo: 0.35, parryChance: 0.2, diSkill: 0.45 },
-      strong: { name: '強い',   reaction: 4,  aggression: 0.8,  shieldChance: 0.38, mistake: 0.03, techChance: 0.85, combo: 0.8, parryChance: 0.45, diSkill: 0.9 },
+      weak:   { name: '弱い',   read: 0.15, reaction: 22, aggression: 0.35, shieldChance: 0.08, mistake: 0.35, techChance: 0.1, combo: 0.0, parryChance: 0.0, diSkill: 0.0 },
+      normal: { name: 'ふつう', read: 0.5, reaction: 10, aggression: 0.6,  shieldChance: 0.22, mistake: 0.12, techChance: 0.45, combo: 0.35, parryChance: 0.2, diSkill: 0.45 },
+      strong: { name: '強い',   read: 0.95, reaction: 4,  aggression: 0.8,  shieldChance: 0.38, mistake: 0.03, techChance: 0.85, combo: 0.8, parryChance: 0.45, diSkill: 0.9 },
     },
   },
 
@@ -662,7 +667,7 @@ window.GAME_DATA = {
       dtilt: { name: '下強：スライド足払い（浮かせ）', dur: 20, iasa: 12,
                poses: [[0,'crouch'],[3,'slide'],[10,'slide'],[20,'crouch']],
                events: [{ f:[2,8], vx:4 }],
-               hits: [{ f:[3,6], x:52, y:10, r:16, dmg:4.3, ang:78, bkb:52, kbg:30 }] },
+               hits: [{ f:[3,6], x:52, y:10, r:18, dmg:4.3, ang:86, bkb:62, kbg:18 }] },
       dashAttack: { name: 'ダッシュA：ウィンドスライド', dur: 32,
                poses: [[0,'slide'],[14,'slide'],[32,'idle']],
                events: [{ f:[0,14], vx:10 }],
@@ -811,9 +816,10 @@ window.GAME_DATA = {
       portrait: 'face_fist.jpg', // キャラ選択の絵
       model: 'wrestler.glb', // 3Dモデル（Higgsfieldで作成）
       stats: { weight: 125, walk: 2.8, run: 5.0, air: 3.2, airAccel: 0.32, jump: 13.8, djump: 12.8,
-               gravity: 0.66, fall: 11.2, airJumps: 1, dmgMul: 1.1, kbMul: 1.0, speed: 0.92 },
-      look: { thick: 9.5, head: 11.5, gaze: { pitch: 10 } }, // gaze：目線のクセ（pitch：あごを上げる角度、tilt：首のかしげ）
-      cpu: { style: 'rush', range: 55, cgrab: true },
+               gravity: 0.66, fall: 11.2, airJumps: 2, hitScale: 1.5, hitScaleY: 1.15, grab: { f: 5, reach: 70, dur: 30 }, landMul: 0.9, runUp: 6, turn: 6, armorMoves: ['dashAttack', 'usmash', 'dsmash', 'ftilt'], dmgMul: 1.1, kbMul: 1.05, speed: 0.92, reachMul: 1.4, endlagMul: 1.15, // 壊しキャラ：技のあとのスキが大きい
+               moveSpeed: { nair: 1.1, fair: 1.1, bair: 1.1, uair: 1.1, dair: 1.1 } },
+      look: { dj:'heavy', jumpCol:'#ffd9a0', scale: 1.15, thick: 9.5, head: 11.5, gaze: { pitch: 10 } }, // gaze：目線のクセ（pitch：あごを上げる角度、tilt：首のかしげ）
+      cpu: { kind: 'breaker', nt: 2, style: 'rush', range: 55, cgrab: true },
       specials: {
         /* --- 地上 --- */
         n:    { name: 'NB：剛腕チョップ（アーマー）', dur: 60, armor: [3, 17],
@@ -893,9 +899,9 @@ window.GAME_DATA = {
       portrait: 'face_fox.jpg', // キャラ選択の絵
       model: 'fox.glb', // 3Dモデル（Higgsfieldで作成・Blenderでしっぽとマフラーの骨を追加）
       stats: { weight: 70, walk: 3.8, run: 8.4, air: 4.5, airAccel: 0.52, jump: 16.1, djump: 15.2,
-               gravity: 0.64, fall: 11.0, airJumps: 1, dmgMul: 0.95, kbMul: 1.0, speed: 1.1, endlagMul: 1.0 },
-      look: { thick: 5.5, head: 9, scale: 0.8, gaze: { pitch: -9 } }, // scale：体の大きさ（0.8 = 2割小さい。くらう範囲も小さくなる）
-      cpu: { style: 'mid', range: 70, counter: true },
+               gravity: 0.64, fall: 11.0, airJumps: 2, grab: { f: 5, reach: 54, dur: 22 }, landMul: 0.9, runUp: 4, turn: 4, dmgMul: 0.95, kbMul: 0.923, speed: 1.1, endlagMul: 1.0, recoveryMul: 1.429 },
+      look: { dj:'flip', jumpCol:'#dff2ff', thick: 5.5, head: 9, scale: 0.8, gaze: { pitch: -9 } }, // scale：体の大きさ（0.8 = 2割小さい。くらう範囲も小さくなる）
+      cpu: { kind: 'neutral', nt: 6, style: 'mid', range: 70, counter: true },
       specials: {
         /* --- 地上 --- */
         n:    { name: 'NB：飛燕（ひえん）斬撃波', dur: 34, iasa: 26,
@@ -913,9 +919,10 @@ window.GAME_DATA = {
                 hits: [{ f:[4,15], x:10, y:90, r:20, dmg:1.4, ang:88, bkb:20, kbg:8, rehit:4, react:'light' },
                        { f:[16,18], x:10, y:100, r:24, dmg:3.6, ang:80, bkb:55, kbg:75, rehit:2 }] },
         // 見切り：前からの打撃を返す（1.25倍）。受付は0.5秒。後ろ・真上からはくらう。飛び道具は返せないがガードして消す
+        // 見切り：両手を左右に広げて張る。左右どちらからの打撃も返す（1.25倍）。真上からはくらう。受付0.5秒、外すとスキ
         down: { name: '下B：見切り（カウンター）', dur: 75, // 速さ補正後：受付 約0.5秒（3〜32コマ）、外すと約0.47秒のスキ
-                counter: { f:[4,40], vs:'melee', mul:1.25, min:5.8, ang:40, bkb:45, kbg:85 },
-                poses: [[0,'kCounter'],[40,'kCounter'],[75,'idle']] },
+                counter: { f:[4,40], vs:'melee', sides:'both', mul:1.25, min:5.8, ang:40, bkb:45, kbg:85 },
+                poses: [[0,'kCounter'],[4,'kCounter',{fa1:88,fa2:8,ba1:-88,ba2:8}],[40,'kCounter',{fa1:88,fa2:8,ba1:-88,ba2:8}],[75,'idle']] },
         /* --- 空中 --- */
         airN: { name: '空中NB：空中飛燕', dur: 34, landLag: 10, gravityMul: 0.5,
                 poses: [[0,'kSlashWind'],[8,'kSlash',{tw:0.8}],[16,'kSlash'],[34,'fall']],
@@ -962,15 +969,17 @@ window.GAME_DATA = {
       id: 'bow', no: 14, name: '弓使い', range: '遠距離', type: 'バランス', weapon: 'bow',
       portrait: 'face_bow.jpg', // キャラ選択の絵
       model: 'archer.glb', // 3Dモデル（Higgsfieldで作成・Blenderで髪と布の骨を追加）
-      stats: { weight: 92, walk: 3.4, run: 6.2, air: 3.9, airAccel: 0.42, jump: 15.5, djump: 14.4,
-               gravity: 0.62, fall: 10.9, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.0, endlagMul: 1.0, hitstunDeal: 1.15 },
-      look: { thick: 6, head: 10, gaze: { pitch: 3, tilt: 0.08 } },
-      cpu: { style: 'zone', range: 330, reflect: true },
+      stats: { weight: 92, walk: 2.4, run: 7.03, air: 3.9, airAccel: 0.42, jump: 15.5, djump: 14.4,
+               gravity: 0.62, fall: 10.9, airJumps: 2, grab: { f: 5, reach: 64, dur: 24 }, landMul: 0.872, runUp: 4, turn: 4, dmgMul: 1.0, kbMul: 0.923, speed: 1.0, endlagMul: 1.0, hitstunDeal: 1.15, recoveryMul: 1.163, aerialDmg: 1.2,
+               moveSpeed: { jab: 1.3, jab2: 1.3, jab3: 1.3, nair: 1.3, fair: 1.3, bair: 1.3, uair: 1.3, dair: 1.3 }, moveDmg: { dashAttack: 1.25 } },
+      look: { dj:'back', jumpCol:'#ffe9a8', thick: 6, head: 10, gaze: { pitch: 3, tilt: 0.08 } },
+      cpu: { kind: 'neutral', nt: 7, style: 'zone', range: 330, reflect: true },
       specials: {
         /* --- 地上 --- */
         // holdShot = Bを押している間ためて、離すと発射（min = ためなし、max = 最大ため）
         n:    { name: 'NB：穿楊（せんよう）ため撃ち', dur: 34, iasa: 24,
-                holdShot: { f:6, max:90, over:30, min:{ dmg:3.6, speed:13, bkb:50, kbg:37 }, max2:{ dmg:15.8, speed:26, bkb:55, kbg:73 } },
+                // 1秒ためると5%、3.7秒（最大）で7.8%。ためている間はスティックで上・左・右に向きを変えられる（aim3）
+                holdShot: { f:6, max:222, over:60, aim3:true, min:{ dmg:3, speed:11, bkb:40, kbg:30, gf:1 }, mid:{ at:0.27, dmg:5, speed:20.5, bkb:48, kbg:55, gf:0.6 }, max2:{ dmg:7.8, speed:30, bkb:55, kbg:80, gf:0.2 } },
                 poses: [[0,'aim'],[6,'aimDraw'],[9,'release'],[34,'idle']],
                 events: [{ f:9, proj:'arrow', shot:true, ang:0, x:30, y:68 }] },
         // 旋矢（せんし）：矢をバトンのように手元で回しながら踏み込み、連続で斬りつけて最後に突き飛ばす
@@ -1034,10 +1043,10 @@ window.GAME_DATA = {
       model: 'agentA.glb',  // 3Dモデル（スーツ・サングラス）
       model2: 'agentB.glb', // ％が swapPct を超えると、この姿（ジャケットとサングラスなし）に変わる
       swapPct: 80,
-      stats: { weight: 88, walk: 3.5, run: 6.6, air: 4.0, airAccel: 0.44, jump: 15.8, djump: 14.7,
-               gravity: 0.62, fall: 10.9, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.04, endlagMul: 1.0, hitstunDeal: 1.15 },
-      look: { thick: 5.5, head: 10, gaze: { pitch: 5, tilt: 0.16 } },
-      cpu: { style: 'zone', range: 300, mine: true },
+      stats: { weight: 88, walk: 3.5, run: 7.326, air: 4.44, airAccel: 0.44, jump: 15.8, djump: 14.7,
+               gravity: 0.62, fall: 10.9, airJumps: 2, grab: { f: 5, reach: 60, dur: 28 }, landMul: 0.92, runUp: 5, turn: 5, dmgMul: 1.0, kbMul: 0.888, speed: 1.04, endlagMul: 1.0, hitstunDeal: 1.15, quickMul: 1.13, recoveryMul: 1.056 },
+      look: { dj:'cork', jumpCol:'#cfd6e6', thick: 5.5, head: 10, gaze: { pitch: 5, tilt: 0.16 } },
+      cpu: { kind: 'neutral', nt: 6, style: 'zone', range: 300, mine: true },
       specials: {
         /* --- 地上 --- */
         // holdShot = Bを押している間ためて、離すと発射（min = ためなし、max2 = 最大ため）
@@ -1099,7 +1108,7 @@ window.GAME_DATA = {
          ジャケットとサングラスを外した姿になり、全部の技が強化版に変わる。撃墜されると元に戻る
          dmgMul：全部の技の攻撃力の倍率（1.5 = 1.5倍） / speedMul：技の速さの倍率 */
       awaken: {
-        dmgMul: 1.5, speedMul: 1.12,
+        dmgMul: 1.12, speedMul: 1.12, statMul: { run: 1.15, air: 1.15, quickMul: 1.37, shieldMul: 1.2, reachMul: 1.2, projRange: 1.3, recoveryMul: 1.45 }, // 覚醒：全部のパラメーターが約1.5倍（10が上限）
         // 強化版の必殺技（ここに書いた技だけ入れかわる）
         specials: {
           n:    { name: 'NB【覚醒】スピンショット（強化弾）', dur: 36,
@@ -1172,10 +1181,10 @@ window.GAME_DATA = {
       model: 'robot.glb', // 3Dモデル（Higgsfieldで作成）
       // hitstunMul：のけぞる時間の倍率（1.18 = 18%長い → 連続技を入れられやすい）
       stats: { weight: 132, walk: 2.6, run: 5.2, air: 3.1, airAccel: 0.28, jump: 11.7, djump: 10.8,
-               gravity: 0.67, fall: 11.4, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 0.92, hitstunMul: 1.25, endlagMul: 1.0 },
-      look: { thick: 10.5, head: 12, scale: 1.24, gaze: { pitch: 2 } }, // scale：体の大きさ（1.18 = 18%大きい。くらう範囲も大きい）
+               gravity: 0.67, fall: 11.4, airJumps: 2, hitScale: 1.129, hitScaleY: 1.0, grab: { f: 8, reach: 80, dur: 36 }, landMul: 1.05, runUp: 9, turn: 10, dmgMul: 1.0, kbMul: 1.04, speed: 0.92, hitstunMul: 1.25, endlagMul: 1.15, quickMul: 1.316, reachMul: 0.9, recoveryMul: 1.321, projRange: 0.55 },
+      look: { dj:'jet', jumpCol:'#8fe6ff', thick: 10.5, head: 12, scale: 1.24, gaze: { pitch: 2 } }, // scale：見た目とくらう範囲の大きさ（技の当たる範囲は stats の hitScale）
       jetFuel: 85, jetRegen: 1.2, // ジェットの燃料（飛べるコマ数）と、地面にいるときの回復の速さ
-      cpu: { style: 'mid', range: 80 },
+      cpu: { kind: 'breaker', nt: 6, style: 'mid', range: 80 },
       specials: {
         /* --- 地上 --- */
         n:    { name: 'NB：チャージビーム（ためるほど太く強い）', dur: 40,
@@ -1233,11 +1242,11 @@ window.GAME_DATA = {
       id: 'cat', no: 21, name: 'ネコ（氷）', range: '近距離', type: '氷⇔炎', weapon: 'claw',
       portrait: 'face_cat_ice.jpg',
       model: 'cat_ice.glb', // 3Dモデル（Higgsfieldで作成・Blenderで4本足の骨を追加）
-      stats: { weight: 72, walk: 3.6, run: 7.6, air: 4.2, airAccel: 0.5, jump: 14.6, djump: 13.9,
-               gravity: 0.65, fall: 11.1, airJumps: 1, dmgMul: 0.92, kbMul: 1.0, speed: 1.12, endlagMul: 1.0 },
+      stats: { weight: 72, walk: 3.6, run: 8.74, air: 4.83, airAccel: 0.5, jump: 14.6, djump: 13.9,
+               gravity: 0.65, fall: 11.1, airJumps: 2, hitScale: 0.7, hitScaleY: 0.85, grab: { f: 4, reach: 50, dur: 20 }, landMul: 0.85, runUp: 4, turn: 3, dmgMul: 0.92, kbMul: 0.931, speed: 1.12, endlagMul: 1.0, shieldMul: 1.267, quickMul: 0.905, recoveryMul: 1.729, projRange: 1.45 },
       // quad：4本足 / hipH：腰の高さ / hurtR：くらう範囲の太さ
-      look: { quad: true, hipH: 24, hurtR: 15, thick: 6, head: 9, tagH: 70, gaze: {} },
-      cpu: { style: 'rush', range: 40 },
+      look: { dj:'double', jumpCol:'#bff4ff', jumpCol2:'#ff8a3c', scale: 0.85, quad: true, hipH: 24, hurtR: 15, thick: 6, head: 9, tagH: 70, gaze: {} },
+      cpu: { kind: 'neutral', kind2: 'breaker', nt: 6, nt2: 4, style: 'rush', range: 40 },
       specials: {
         /* --- 地上 --- */
         n:    { name: 'NB：氷のつぶて', dur: 26, elem: 'ice',
@@ -1295,8 +1304,8 @@ window.GAME_DATA = {
       /* ===== 炎の姿（下Bで入れかわる）：パワー重視。バンダナと目の傷 ===== */
       form2: {
         name: 'ネコ（炎）', portrait: 'face_cat_fire.jpg', model: 'cat_fire.glb',
-        stats: { weight: 84, walk: 3.0, run: 6.2, air: 3.6, airAccel: 0.38, jump: 13.2, djump: 12.5,
-                 gravity: 0.66, fall: 11.2, airJumps: 1, dmgMul: 1.15, kbMul: 1.0, speed: 0.96 },
+        stats: { weight: 84, walk: 3.0, run: 6.702, air: 3.892, airAccel: 0.38, jump: 13.2, djump: 12.5,
+                 gravity: 0.66, fall: 11.2, airJumps: 2, hitScale: 0.7, hitScaleY: 0.85, grab: { f: 6, reach: 56, dur: 28 }, landMul: 1.15, runUp: 7, turn: 7, dmgMul: 1.15, kbMul: 0.93, speed: 0.96, shieldMul: 1.2, quickMul: 0.829, recoveryMul: 1.6 },
         // 炎の姿で入れかわる通常技（強い技だけ）
         moves: {
           ftilt: { name: '横強【炎】燃えるツメ', dur: 28, iasa: 24, elem: 'fire',
@@ -1380,10 +1389,10 @@ window.GAME_DATA = {
       id: 'shield', no: 40, name: '盾使い', range: '立ち回り', type: 'ディフェンス', weapon: 'shield',
       portrait: 'face_shield.jpg',
       model: 'shield_knight.glb', // 3Dモデル（Blenderで作成）
-      stats: { weight: 108, walk: 3.0, run: 5.8, air: 3.4, airAccel: 0.36, jump: 14.6, djump: 13.6,
-               gravity: 0.64, fall: 11.0, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 0.98, endlagMul: 1.0, shieldMul: 1.25 },
-      look: { thick: 6, head: 9.5, gaze: { pitch: 0 } },
-      cpu: { style: 'mid', range: 80, reflect: true },
+      stats: { weight: 108, walk: 3.0, run: 5.4, air: 3.4, airAccel: 0.36, jump: 14.6, djump: 13.6,
+               gravity: 0.64, fall: 11.0, airJumps: 2, grab: { f: 6, reach: 60, dur: 28 }, landMul: 1.2, runUp: 8, turn: 10, quickMul: 0.9, dmgMul: 1.0, kbMul: 0.946, speed: 0.98, endlagMul: 1.0, shieldMul: 1.25, recoveryMul: 1.251 },
+      look: { dj:'shield', jumpCol:'#9fd8ff', thick: 6, head: 9.5, gaze: { pitch: 0 } },
+      cpu: { kind: 'mid', nt: 5, style: 'mid', range: 80, reflect: true },
       specials: {
         /* --- 地上 --- */
         // シールドバースト：Bを押している間ためる。盾から衝撃を放つ撃墜技
@@ -1452,14 +1461,14 @@ window.GAME_DATA = {
     {
       id: 'skater', no: 41, name: 'スケーター', range: '立ち回り', type: 'スピード', weapon: 'skate',
       portrait: 'face_skater.jpg',
-      model: null, // 3Dモデルはあとで（今は仮の体）
+      model: 'skater.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 80, walk: 4.2, run: 9.0, air: 4.6, airAccel: 0.55, jump: 16.4, djump: 15.2,
-               gravity: 0.63, fall: 11.0, airJumps: 1, dmgMul: 0.95, kbMul: 1.0, speed: 1.1, endlagMul: 1.0, friction: 0.7 },
-      look: { thick: 5.5, head: 9.5, gaze: { pitch: 0 } },
-      cpu: { style: 'mid', range: 70 },
+               gravity: 0.63, fall: 11.0, airJumps: 2, hitScale: 0.9, hitScaleY: 0.95, grab: { f: 5, reach: 62, dur: 24 }, landMul: 0.9, runUp: 10, turn: 10, dmgMul: 0.95, kbMul: 0.956, speed: 1.1, endlagMul: 1.0, friction: 0.7, quickMul: 0.79, reachMul: 1.253, recoveryMul: 1.29 },
+      look: { dj:'trick', jumpCol:'#9fe6ff', scale: 0.95, thick: 5.5, head: 9.5, gaze: { pitch: 0 } },
+      cpu: { kind: 'neutral', nt: 8, sigW: 4, style: 'mid', range: 70 },
       specials: {
         /* --- 地上 --- */
-        n:    { name: 'NB：ウィンドカッター（風の刃）', dur: 32, iasa: 24,
+        n:    { name: 'NB：ウィンドカッター（風の刃・相手を浮かせる）', dur: 32, iasa: 24,
                 poses: [[0,'kickWind'],[6,'roundKick'],[14,'roundKick'],[32,'idle']],
                 events: [{ f:7, proj:'wind', ang:0, x:40, y:50 }] },
         side: { name: '横B：ウィンドグラインド（高速突進）', dur: 40,
@@ -1513,7 +1522,7 @@ window.GAME_DATA = {
       },
       projectiles: {
         // 風の刃：速いけど弱い（足止め・差し込み用）
-        wind: { type:'wave', speed:13, life:22, r:16, dmg:3.6, ang:40, bkb:45, kbg:30, max:2 },
+        wind: { type:'wave', speed:13, life:22, r:16, dmg:4, ang:84, bkb:60, kbg:18, max:2 }, // 当たると相手が真上に浮く（空上・空前につなげる）
       },
       overrides: {},
     },
@@ -1523,11 +1532,11 @@ window.GAME_DATA = {
     {
       id: 'gsword', no: 42, name: '大剣使い', range: '暴れ', type: 'パワー', weapon: 'gsword',
       portrait: 'face_gsword.jpg',
-      model: null, // 3Dモデルはあとで（今は仮の体）
+      model: 'gsword.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 104, walk: 3.3, run: 7.2, air: 3.6, airAccel: 0.4, jump: 15.0, djump: 14.0,
-               gravity: 0.65, fall: 11.1, airJumps: 1, dmgMul: 1.1, kbMul: 1.0, speed: 1.0, endlagMul: 1.0 },
-      look: { thick: 5.5, head: 9.5, scale: 1.05, gaze: { pitch: 0 } },
-      cpu: { style: 'mid', range: 95 },
+               gravity: 0.65, fall: 11.1, airJumps: 2, hitScale: 1.048, hitScaleY: 1.0, grab: { f: 7, reach: 58, dur: 32 }, landMul: 1.1, runUp: 7, turn: 9, dmgMul: 1.1, kbMul: 0.951, speed: 1.0, endlagMul: 1.15, quickMul: 1.214, reachMul: 0.62 },
+      look: { dj:'heavyFlip', jumpCol:'#7fb0ff', thick: 5.5, head: 9.5, scale: 1.05, gaze: { pitch: 0 } },
+      cpu: { kind: 'breaker', nt: 5, style: 'mid', range: 95 },
       specials: {
         /* --- 地上 --- */
         // 溜め斬り：Bを押している間ためる。最大まで溜めると撃墜級
@@ -1597,17 +1606,17 @@ window.GAME_DATA = {
     {
       id: 'chain', no: 43, name: '鎖鎌使い', range: '暴れ', type: 'テクニック', weapon: 'chain',
       portrait: 'face_chain.jpg',
-      model: null, // 3Dモデルはあとで（今は仮の体）
+      model: 'chain.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 92, walk: 3.9, run: 8.2, air: 4.2, airAccel: 0.48, jump: 15.8, djump: 14.8,
-               gravity: 0.64, fall: 11.0, airJumps: 1, dmgMul: 1.05, kbMul: 1.0, speed: 1.05, endlagMul: 1.0 },
-      look: { thick: 5.5, head: 9.5, gaze: { pitch: 0 } },
+               gravity: 0.64, fall: 11.0, airJumps: 2, grab: { f: 7, reach: 142, dur: 40 }, landMul: 0.9, runUp: 4, turn: 5, dmgMul: 1.05, kbMul: 0.963, speed: 1.05, endlagMul: 1.0, shieldMul: 1.2, quickMul: 0.95, reachMul: 0.874, recoveryMul: 1.358 },
+      look: { dj:'cork', jumpCol:'#ff7070', thick: 5.5, head: 9.5, gaze: { pitch: 0 } },
       // 鎖の長さ（下Bで切りかえ）：鎖を使う技（wire のある技）のリーチ（reach）と攻撃力（dmg）が変わる
       chainModes: [
         { name: '長い', reach: 1.35, dmg: 0.75, col: '#9fd8ff' },  // リーチが長くて弱い
         { name: 'ふつう', reach: 1.0, dmg: 1.0, col: '#ffffff' },
         { name: '短い', reach: 0.7, dmg: 1.3, col: '#ff7070' },    // リーチが短くて強い
       ],
-      cpu: { style: 'mid', range: 70 },
+      cpu: { kind: 'neutral', nt: 7, style: 'mid', range: 70 },
       specials: {
         /* --- 地上 --- */
         // 鎖旋風：鎖をぐるぐる振り回して、まわり全部を攻撃（Bを押していると長く回す）。最後に外へはじき飛ばす
@@ -1704,11 +1713,11 @@ window.GAME_DATA = {
     {
       id: 'aiki', no: 44, name: '合気道の達人', range: '立ち回り', type: 'テクニック', weapon: 'aiki',
       portrait: 'face_aiki.jpg',
-      model: null, // 3Dモデルはあとで（今は仮の体）
+      model: 'aiki.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 95, walk: 3.2, run: 6.6, air: 3.8, airAccel: 0.42, jump: 15.0, djump: 14.0,
-               gravity: 0.64, fall: 11.0, airJumps: 1, dmgMul: 1.0, kbMul: 1.0, speed: 1.0, endlagMul: 1.0 },
-      look: { thick: 5, head: 9.5, gaze: { pitch: 0 } },
-      cpu: { style: 'mid', range: 70, counter: true, cgrab: true },
+               gravity: 0.64, fall: 11.0, airJumps: 2, grab: { f: 5, reach: 60, dur: 26 }, landMul: 1.0, runUp: 3, turn: 3, dmgMul: 1.0, kbMul: 0.977, speed: 1.0, endlagMul: 1.0, shieldMul: 1.08, quickMul: 1.3, reachMul: 1.2, recoveryMul: 1.381, projRange: 2.5 },
+      look: { dj:'calm', jumpCol:'#ffffff', thick: 5, head: 9.5, gaze: { pitch: 0 } },
+      cpu: { kind: 'neutral', nt: 8, style: 'mid', range: 70, counter: true, cgrab: true },
       specials: {
         /* --- 地上 --- */
         n:    { name: 'NB：気当て（近くの相手を押し飛ばす）', dur: 36, iasa: 28,
@@ -1780,11 +1789,11 @@ window.GAME_DATA = {
     {
       id: 'tako', no: 45, name: 'タコ', range: 'バランス', type: 'テクニック', weapon: 'tako',
       portrait: 'face_tako.jpg',
-      model: null, // 3Dモデルはあとで（今は仮の体＋触手）
+      model: 'tako.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 74, walk: 2.6, run: 5.2, air: 3.8, airAccel: 0.5, jump: 14.0, djump: 11.5,
-               gravity: 0.56, fall: 9.6, airJumps: 3, dmgMul: 0.85, kbMul: 1.0, speed: 0.95, endlagMul: 1.0 },
-      look: { thick: 5, head: 11, scale: 0.85, gaze: { pitch: 0 } },
-      cpu: { style: 'mid', range: 80 },
+               gravity: 0.56, fall: 9.6, airJumps: 3, grab: { f: 6, reach: 64, dur: 30 }, landMul: 1.15, runUp: 6, turn: 4, dmgMul: 0.85, kbMul: 1.113, speed: 0.95, endlagMul: 1.35, shieldMul: 1.293 },
+      look: { dj:'puff', jumpCol:'#ffc0f0', thick: 5, head: 11, scale: 0.85, modelScale: 0.75, gaze: { pitch: 0 } }, // modelScale：ちびの3Dモデルは脚が短いので、見た目を少し小さく
+      cpu: { kind: 'mid', nt: 5, sigW: 4, style: 'mid', range: 80 },
       specials: {  // 出だしは速め
         n: {name:'NB：バブル（当たると2秒閉じこめる）', dur:37, iasa:29, poses:[[0, 'punchWind'], [6, 'palm'], [15, 'palm'], [37, 'idle']], events:[{f:7, proj:'bubble', ang:0, x:40, y:60}]},
         side: {name:'横B：泡ジェット（すべるように突進）', dur:41, poses:[[0, 'tuck'], [3, 'dropkick'], [17, 'dropkick'], [41, 'idle']], events:[{f:[3, 17], vx:10}], hits:[{f:[3, 17], x:30, y:44, r:26, dmg:6.5, ang:40, bkb:52, kbg:90}]},
