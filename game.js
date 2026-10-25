@@ -387,6 +387,21 @@ const POSES = {
   shadeGrab:    P(2, 150, 150, -8, 35, 18, -18, -18, -8, 0, 0.3),
   shadeOff:     P(-6, 75, 15, -8, 35, 18, -18, -18, -8, 0, -0.4),
   poseCool:     P(-3, 25, 25, -25, 115, 14, -12, -22, -6, 0, 0.35),
+  // ===== 空後（キャラごと） =====
+  bfWind:       P(8, 75, 135, 30, 110, 60, -85, 20, -60, 0, 0.6),        // 拳闘士：裏拳のかまえ（腕を胸の前にたたむ）
+  backfist:     P(-8, -108, 6, 45, 100, 55, -78, 10, -50, 0, -0.8),      // 拳闘士：裏拳（体をひねって、腕を後ろへ振りぬく）
+  sobatWind:    P(12, 110, 60, 80, 70, 95, -135, 45, -115, 0, 0.45),     // 狐：後ろ回し蹴りのため
+  sobat:        P(30, 145, 30, -45, 40, 85, -140, -128, 0, -18, -0.65),  // 狐：後ろ回し蹴り（後ろ足を高く伸ばし、腕を流す）
+  stabWind:     P(6, 70, 80, 40, 125, 50, -70, -10, -40, 0, 0.5),        // 弓：矢を逆手に持つ
+  arrowStab:    P(12, 78, 70, -102, 4, 45, -72, -20, -30, 0, -0.15),     // 弓：振り向かずに、後ろへ矢を突き刺す
+  flipKickWind: P(22, 110, 80, 100, 80, 98, -142, 92, -140, 0, 0),       // エージェント：体を丸める
+  flipKick:     P(58, 155, 35, 145, 40, -108, -4, -118, -2, -28, 0),     // エージェント：体をしならせて、両足を後ろへ（バックドロップキック）
+  roboBk:       P(34, 45, 95, 25, 105, 55, -95, -118, 0, 0, -0.4),       // ロボ：後ろ蹴り（足から噴射）
+  shieldBash:   P(4, 60, 90, -98, 22, 50, -70, 0, -40, 0, -0.15),        // 盾：体をひねって、盾を後ろへ突き出す
+  underThrust:  P(14, 18, 72, 40, 95, 55, -85, 0, -55, 0, -0.25),        // 大剣：腕と胴の間から、後ろへ突く（剣は逆向き）
+  aikiBk:       P(34, 85, 95, 20, 70, 62, -112, -126, -2, 0, -0.15),     // 合気道：まっすぐな後ろ蹴り（腕は前でかまえる）
+  whipWind:     P(6, 60, 60, 135, 40, 50, -60, 20, -50, 0, 0.55),        // タコ：触手（腕）を振りかぶる
+  tentWhip:     P(10, 60, 60, -112, -24, 50, -60, 20, -50, 0, -0.15),    // タコ：触手をムチのように後ろへ打ちつける
 };
 function lerpPose(a, b, t, out) {
   const o = out || {};
@@ -595,6 +610,7 @@ function buildMoves(c) {
   // recoveryMul：上Bで上がる高さ
   if (st.recoveryMul && st.recoveryMul !== 1) for (const k of ['uspecial', 'uspecialAir']) {
     const m = moves[k]; if (m && m.events) m.events.forEach(e => { if (e.vy !== undefined && Array.isArray(e.f)) e.vy *= st.recoveryMul; });
+    if (m && m.dash8) m.dash8 = Object.assign({}, m.dash8, { speed: m.dash8.speed * st.recoveryMul }); // 8方向の上Bも、復帰力の分だけ遠くへ
   }
   // grab：つかみの性能（f：出る速さ〈コマ〉、reach：届く距離、dur：外したときを含めた全体のコマ）
   if (st.grab && moves.grab && moves.grab.hits) {
@@ -611,8 +627,8 @@ function buildMoves(c) {
     }
   }
   // hitScale：体の大きさを変えたぶん、技の届く範囲（位置と大きさ）も同じ割合で変える
-  if (st.hitScale && st.hitScale !== 1) for (const k in moves) {
-    const m = moves[k], q = st.hitScale;
+  if ((st.hitScale && st.hitScale !== 1) || (st.hitScaleY && st.hitScaleY !== 1)) for (const k in moves) {
+    const m = moves[k], q = st.hitScale || 1;
     const qy = st.hitScaleY || q; // 高さ方向だけ別の倍率にできる（大きいキャラの技が小さい相手の頭の上を通りすぎないように）
     if (m.hits) m.hits.forEach(h => { h.x *= q; h.y *= qy; h.r *= q; if (h.ring !== undefined) h.ring *= qy; });
     if (m.events) m.events.forEach(e => { if (e.proj) { if (e.x !== undefined) e.x *= q; if (e.y !== undefined) e.y *= q; } if (e.blast) { e.blast = Object.assign({}, e.blast, { x: e.blast.x * q, y: e.blast.y * q }); } });
@@ -621,6 +637,7 @@ function buildMoves(c) {
   if (st.armorMoves) for (const k of st.armorMoves) { const m = moves[k]; if (m && m.hits && m.hits.length && !m.armorW) m.armorW = { f: [1, Math.max(1, Math.min(...m.hits.map(h => h.f[0])) - 1)] }; }
   // moveSpeed：技ごとの速さ倍率 { 技の名前: 倍率 }（1.1 = 1割速い） / moveDmg：技ごとの攻撃力倍率
   if (st.moveSpeed) for (const k in st.moveSpeed) if (moves[k]) scaleMove(moves[k], st.moveSpeed[k], 1);
+  if (st.moveKb) for (const k in st.moveKb) { const m = moves[k]; if (m && m.hits) m.hits.forEach(h => { if (h.kbg) h.kbg *= st.moveKb[k]; if (h.bkb) h.bkb *= st.moveKb[k]; }); } // moveKb：技ごとの吹っ飛ばし倍率
   if (st.moveDmg) for (const k in st.moveDmg) { const m = moves[k]; if (m && m.hits) m.hits.forEach(h => { if (h.dmg) h.dmg *= st.moveDmg[k]; }); }
   // aerialDmg：空中技（空N・空前・空後・空上・空下）の攻撃力の倍率
   if (st.aerialDmg && st.aerialDmg !== 1) for (const k of ['nair', 'fair', 'bair', 'uair', 'dair']) { const m = moves[k]; if (m && m.hits) m.hits.forEach(h => { if (h.dmg) h.dmg *= st.aerialDmg; }); }
@@ -895,6 +912,8 @@ class Fighter {
     if (this.techLock > 0) this.techLock--;
     if (this.hitFlash > 0) this.hitFlash--;
     if (this.armorFlash > 0) this.armorFlash--;
+    if (this.parryGlint > 0) this.parryGlint--;
+    if (this.jabLockT > 0) this.jabLockT--;
     if (this.landSquash > 0) this.landSquash--;
     this.jumpPressT++;
     if (this.state !== 'shield') this.shieldHP = Math.min(this.shMax, this.shieldHP + PH.shieldRegen);
@@ -905,6 +924,10 @@ class Fighter {
       this.techT = PH.techWindow; this.techLock = PH.techLockout;
     }
     this.vxSet = false;
+    // はじき入力：スティックを中央付近から一気に倒した瞬間を覚える（はじき＋Aでスマッシュ）
+    { const m = Math.hypot(pad.mx, pad.my);
+      if (m < 0.3) this.stickLowAt = this.anim;
+      else if (m > 0.8 && this.anim - (this.stickLowAt ?? -99) <= 3 && Math.hypot(this.prevMx || 0, this.prevMy || 0) <= 0.8) this.flickAt = this.anim; }
     this.runState(pad);
     this.fastFallCheck(pad);
     if (this.bubble > 0 && this.state !== 'dizzy') this.bubble = 0;
@@ -1112,9 +1135,17 @@ class Fighter {
     if (pad.take('C')) {
       const d = stickDir(pad.cdir.x, pad.cdir.y);
       if (d === 'side') this.facing = sign(pad.cdir.x);
+      else if (d === 'n' && Math.abs(pad.mx) > 0.3) this.facing = sign(pad.mx); // Cの向きがないときは、移動スティックの向き
       return this.startMove(d === 'up' ? 'usmash' : d === 'down' ? 'dsmash' : 'fsmash', pad, 'C');
     }
     if (pad.take('A')) {
+      // はじき＋A ＝ スマッシュ（はじいた方向に出す。Aを押している間ためられる）
+      if (!this.cpuCfg && this.anim - (this.flickAt ?? -99) <= 4 && Math.hypot(pad.mx, pad.my) > 0.7) {
+        const d = stickDir(pad.mx, pad.my);
+        if (d === 'side') this.facing = sign(pad.mx);
+        this.flickAt = -99;
+        return this.startMove(d === 'up' ? 'usmash' : d === 'down' ? 'dsmash' : 'fsmash', pad, 'A');
+      }
       // 走っているときのA ＝ ダッシュ攻撃
       if (this.state === 'run' && this.moves.dashAttack && Math.abs(this.vx) > this.s.run * 0.5) return this.startMove('dashAttack', pad);
       const d = stickDir(pad.mx, pad.my);
@@ -1268,8 +1299,8 @@ class Fighter {
     }
     let f = this.mf;
     // スマッシュのため（Cスティックを倒し続ける）
-    if (m.charge && (this.chargeBtn === 'C' || this.chargeBtn === 'B') && f === m.charge.f && !this.chargeDone) {
-      if ((this.chargeBtn === 'B' ? pad.held.B : pad.held.C) && this.chargeT < m.charge.max) {
+    if (m.charge && (this.chargeBtn === 'C' || this.chargeBtn === 'B' || (this.chargeBtn === 'A' && /smash$/.test(m.key))) && f === m.charge.f && !this.chargeDone) {
+      if ((this.chargeBtn === 'B' ? pad.held.B : this.chargeBtn === 'A' ? pad.held.A : pad.held.C) && this.chargeT < m.charge.max) {
         this.chargeT++; this.charging = true;
         this.chargeMul = 1 + (m.charge.mul - 1) * this.chargeT / m.charge.max;
         this.activeF = -1;
@@ -1366,6 +1397,7 @@ class Fighter {
     }
     // 上B（復帰技）の向き：スティックを倒した方へ（真上から左右に max 度まで）。飛び始めの間は少しずつ向きを変えられる
     if (m.aim && f >= m.aim.f[0] && f <= m.aim.f[1]) this.steerAim(m, pad);
+    if (m.dash8) this.updateDash8(m, pad, f);
     if (m.events) for (const ev of m.events) {
       const on = Array.isArray(ev.f) ? f >= ev.f[0] && f <= ev.f[1] : f === ev.f;
       if (on) this.doEvent(ev);
@@ -1381,6 +1413,35 @@ class Fighter {
     if (this.grounded) { if (!this.vxSet) this.vx = approach(this.vx, 0, this.gf); }
     else if (!this.vxSet) this.airDrift(pad, 0.85);
     this.mf++;
+  }
+  // 8方向に動く上B：f のコマでスティックの向き（8方向）を決めて、n コマのあいだ speed で進む
+  //   vanish：進んでいる間は姿を消す（エージェントの瞬間移動）／ink：出発した場所に墨の煙（タコ）／trail：通った跡のエフェクト
+  //   dirs：'up180' なら下向きには行けない（横〜上だけ）
+  updateDash8(m, pad, f) {
+    const d = m.dash8;
+    if (f === d.f) {
+      let mx = pad.mx || 0, my = pad.my || 0;
+      if (Math.hypot(mx, my) < 0.3) { mx = 0; my = 1; }
+      let a = Math.round(Math.atan2(my, mx) / (Math.PI / 4)) * (Math.PI / 4);
+      if (d.dirs === 'up180' && Math.sin(a) < -0.01) a = Math.cos(a) >= 0 ? 0 : Math.PI;
+      this.d8 = [Math.cos(a), Math.sin(a)]; if (Math.abs(this.d8[0]) < 1e-6) this.d8[0] = 0;
+      if (this.d8[0]) this.facing = sign(this.d8[0]);
+      if (d.vanish) { this.hidden = true; this.b.fx.smoke(this.x, this.y - 40); SFX.play('dodge'); }
+      if (d.ink) this.b.spawnProjectile(this, { proj: 'ink', ang: 0, x: 0, y: 40 });
+    }
+    if (this.d8 && f >= d.f && f < d.f + d.n) {
+      if (this.grounded && this.d8[1] < 0) { this.vx = this.d8[0] * d.speed; this.vxSet = true; }
+      else { this.vx = this.d8[0] * d.speed; this.vy = -this.d8[1] * d.speed; this.vxSet = true; if (this.d8[1] > 0) { this.grounded = false; this.ff = false; } }
+      if (d.trail && f % 2 === 0) {
+        if (d.trail === 'ice') { this.b.fx.spark(this.x - this.d8[0] * 10, this.y - 10, 22, '#bff4ff'); this.b.fx.ring(this.x, this.y - 6, '#d8fbff', 18); }
+        else if (d.trail === 'fire') this.b.fx.flame(this.x, this.y - 20, 9, -this.d8[0] * 2, 2);
+        else this.b.fx.spark(this.x, this.y - 40, 14, d.trail);
+      }
+    }
+    if (this.d8 && f === d.f + d.n) {
+      this.vx *= d.end ?? 0.3; this.vy *= d.end ?? 0.3; this.vxSet = true;
+      if (d.vanish) { this.hidden = false; this.b.fx.ring(this.x, this.y - 40, '#ffd28a', 40); SFX.play('boom'); }
+    }
   }
   steerAim(m, pad) {
     let mx = (pad.mx || 0) * this.facing, my = pad.my || 0;
@@ -1424,6 +1485,12 @@ class Fighter {
       this.b.shake = Math.max(this.b.shake, 4);
       SFX.play(this.c.weapon === 'gadget' ? 'gun' : 'shoot', 1); SFX.play('boom');
     }
+    // ムチの軌跡（タコの触手など）：後ろへ弧をえがく光
+    if (ev.fxArc) {
+      const sc = this.look.scale || 1, dir = ev.fxArc.back ? -1 : 1;
+      for (let i = 0; i < 7; i++) { const a = (-40 + i * 18) * DEG, rr = (52 + i * 3) * sc; this.b.fx.spark(this.x + dir * this.facing * Math.cos(a) * rr, this.y - 50 * sc - Math.sin(a) * rr, 16, ev.fxArc.col || '#ffffff'); }
+      SFX.play('slash');
+    }
     if (ev.proj) this.b.spawnProjectile(this, ev);
     // 瞬歩：姿を消す（その間は無敵）→ 相手の背中側（いなければ前）に現れる
     if (ev.vanish !== undefined) {
@@ -1456,7 +1523,7 @@ class Fighter {
     return m.charge ? m.charge.f : m.holdShot ? m.holdShot.f : m.jet ? m.jet.f : 0;
   }
   endMove() {
-    const m = this.move; this.hidden = false; this.aimA = 0; this.aimHits = null;
+    const m = this.move; this.hidden = false; this.aimA = 0; this.aimHits = null; this.d8 = null;
     this.move = null; this.charging = false; this.chargeMul = 1; this.activeF = -1;
     if (this.grabbed) this.releaseGrab();
     if (this.grounded) this.state = 'idle';
@@ -1496,11 +1563,11 @@ class Fighter {
     if (this.ledgeCd > 0 || this.grounded) return;
     const upB = this.state === 'move' && (this.move.helpless || this.move.jet);
     if (!(this.state === 'air' || this.state === 'helpless' || this.state === 'airdodge' || upB)) return;
-    if (this.vy + this.kby < -1 && !upB) return;
+    if (this.vy + this.kby < -3 && !upB) return; // 勢いよく上がっている最中はつかまない（落ち始め・ゆっくり上昇中はつかむ）
     for (const side of [-1, 1]) {
       const lx = side * ST.halfWidth, dx = (this.x - lx) * side;
-      if (dx < -10 || dx > 46) continue;
-      if (this.y < 22 || this.y > 125) continue;
+      if (dx < -16 || dx > 58) continue; // 崖のつかまり範囲（前より広く、ちゃんと反応するように）
+      if (this.y < 8 || this.y > 160) continue;
       const idx = side < 0 ? 0 : 1;
       const occ = this.b.ledges[idx];
       if (occ && occ !== this) {
@@ -1520,14 +1587,17 @@ class Fighter {
     this.jumps = this.s.airJumps; this.usedOnce = {};
     this.move = null; this.charging = false; this.chargeMul = 1; this.activeF = -1;
     this.ledgeGrabs++;
-    this.invuln = Math.max(this.invuln, Math.max(this.ledgeGrabs >= 4 ? 0 : 8, PH.ledgeInvuln - (this.ledgeGrabs - 1) * 14)); // 着地せずにつかみ直すほど短く、4回目以降はほぼ無し
+    // 崖の無敵：％が低いほど長く、高いほど短い（0%で60コマ → 150%で18コマ）。着地せずにつかみ直すほど短く、4回目以降はほぼ無し
+    const pInv = Math.round(lerp(PH.ledgeInvulnLow, PH.ledgeInvulnHigh, clamp(this.percent / 150, 0, 1)));
+    this.invuln = Math.max(this.invuln, Math.max(this.ledgeGrabs >= 4 ? 0 : 6, pInv - (this.ledgeGrabs - 1) * 14));
     this.b.fx.dust(side * ST.halfWidth, 0, 0.5);
   }
   ledgeTrumped() {
     this.freeLedge();
-    this.state = 'hitstun'; this.hurtKind = 'hurtLight'; this.timer = 30; this.grounded = false;
-    this.kbx = -this.facing * 3.2; this.kby = -6; this.vx = this.vy = 0; this.invuln = 0; this.ledgeCd = 50;
-    this.b.fx.text(this.x, this.y - 70, '崖奪い！', '#ffd34d');
+    // 崖を奪われた：外へはじかれる。少しの間は動けず、無敵もない（攻撃が通る）。そのあとジャンプなどで戻る
+    this.state = 'hitstun'; this.hurtKind = 'hurtLight'; this.timer = 16; this.grounded = false;
+    this.kbx = -this.facing * 3.2; this.kby = -5; this.vx = this.vy = 0; this.invuln = 0; this.ledgeCd = 40;
+    this.b.fx.spark(this.x, this.y - 60, 16, '#ffd34d');
   }
   freeLedge() { if (this.ledge >= 0 && this.b.ledges[this.ledge] === this) this.b.ledges[this.ledge] = null; this.ledge = -1; }
   updateLedge(pad) {
@@ -1769,6 +1839,7 @@ class Fighter {
       case 'move': {
         target = this.movePose(this.move, this.holdFrame());
         if (this.aimA) { target = copyPose(target); target.r = (target.r || 0) + this.aimA / DEG * 0.85; } // 斜めに飛ぶ上Bは体ごと傾ける
+        if (this.d8 && this.move.dash8 && this.mf >= this.move.dash8.f && this.mf < this.move.dash8.f + this.move.dash8.n + 4) { target = copyPose(target); target.r = (target.r || 0) + Math.atan2(this.d8[0] * this.facing, this.d8[1]) / DEG * 0.85; } // 8方向の上B：進む向きに体を傾ける
         if (this.jetTilt) { target = copyPose(target); target.r = (target.r || 0) + this.jetTilt * 0.8; }
         if (this.move.holdShot && this.move.holdShot.aim3 && this.shotAim === 'up') { target = copyPose(lerpPose(target, P0.aimUp, 1)); target.fa1 = 172; target.ba1 = 168; } // 真上にかまえる
         sp = SPRING.move;
@@ -2088,6 +2159,7 @@ class Projectile {
       this.armed = this.age >= this.arm;
     } else if (this.type === 'smoke') {
       // 煙幕弾：飛んでいって、地面か一定時間で煙になる
+      if (!this.cloud && this.instant) { this.cloud = true; this.vx = this.vy = 0; this.r = this.cloudR || 55; this.life = Math.min(this.life, this.cloudLife || 120); }
       if (!this.cloud) {
         this.vy += this.grav; this.x += this.vx; this.y += this.vy;
         const hitFloor = this.y >= 0 && this.py <= 0 && Math.abs(this.x) <= ST.halfWidth;
@@ -2159,10 +2231,11 @@ function capsuleHit(f, x, y, r) {
 }
 // くらい判定（カプセル形）：[下の点x, y, 上の点x, y, 太さ]
 function capsuleOf(f) {
-  const s = f.look.scale || 1; // 小さいキャラは、くらう範囲も小さい
+  // くらう範囲の大きさ：look.hurtScale（キャラの「大きさ」の数値）。なければ見た目の大きさ（scale）
+  const vs = f.look.scale || 1, s = f.look.hurtScale || vs, k = s / vs;
   let ax = f.x, ay = f.y - 10 * s, bx = f.x, by = f.y - 82 * s, rr = 15 * Math.sqrt(s);
   if (f.qcap && f.state !== 'ledge') { // 4本足：腰から頭までの横長のくらい判定（立ち上がれば縦になる）
-    const q = f.qcap; ax = f.x + q[0] * f.facing; ay = f.y - q[1]; bx = f.x + q[2] * f.facing; by = f.y - q[3]; rr = q[4];
+    const q = f.qcap; ax = f.x + q[0] * f.facing * k; ay = f.y - q[1] * k; bx = f.x + q[2] * f.facing * k; by = f.y - q[3] * k; rr = q[4] * k;
     if (f.state === 'crouch') { ay = f.y - q[1] * 0.75; by = f.y - q[3] * 0.7; }
   } else if (f.state === 'crouch') by = f.y - 52 * s; // しゃがむと上半分には当たらない
   return [ax, ay, bx, by, rr];
@@ -2405,7 +2478,7 @@ const CPU_PLANS = {
     const edgeBehind = Math.abs(me.x - dir * 170) > ST.halfWidth - 20;
     const approaching = (op.x - me.x) * op.vx < -1.5 || (op.state === 'run' && sign(op.vx) === -dir);
     const shot = (hold, up) => { if (!up && !this.face(dir)) return true; p.mx = 0; p.my = 0; p.press('B'); this.plan = { type: 'holdB', my: up ? 1 : 0, t: me.moves.nspecial.holdShot.f + 2 + hold }; return true; };
-    if (opOff && op.state !== 'ledge' && Math.abs(dy) < 220 && adx > 120) return shot(30 + ((rnd() * 60) | 0), dy < -150 && adx < 120);
+    if (opOff && op.state !== 'ledge' && Math.abs(dy) < 220 && adx > 120 && (this.egShots || 0) < 2 && (this.egShots = (this.egShots || 0) + 1)) return shot(30 + ((rnd() * 60) | 0), dy < -150 && adx < 120);
     if (dy < -120 && adx < 90 && !opOpen) return shot(10 + ((rnd() * 40) | 0), true);
     if (Math.abs(dy) > 90 || (opOpen && op.state !== 'down')) return false; // 追撃はいつものコンボ
     const r = rnd(), kill = op.percent > 95;
@@ -2431,224 +2504,6 @@ const CPU_PLANS = {
     }
     return shot(Math.min(150, ((adx - 200) * 0.25) | 0) + ((rnd() * 30) | 0));               // 遠い：ためて撃つ
   },
-  // 拳闘士（立ち回り2）：まっすぐ前に出る。ダッシュ攻撃（アーマー）で突っこみ、ローリングプレス（つかみ）で距離をつめる。
-  //   ガードする相手にはつかみ技、撃墜％ならスマッシュ（アーマー）
-  fist(op, c) {
-    const { me, p, adx, dy, dir } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70) return false;
-    if (OPEN_STATES.includes(op.state) && op.state !== 'down') return false; // 追撃はいつもの動き
-    const r = rnd(), kill = op.percent > 100;
-    // 相手が技を出しかけている：アーマー技で受けながら殴り返す（読みではなく、拳闘士のいつものやり方）
-    if (op.state === 'move' && op.move && op.move.hits && op.mf < (op.move.firstHit || 0) && adx < 80 && me.facing === dir && r < 0.5) { p.mx = 0; p.my = 0; p.press('B'); return true; }
-    if (op.state === 'shield' && adx < 60) { if (this.face(dir)) { p.my = -1; p.press('B'); } return true; } // スリーパーホールド（ガード不可のつかみ）
-    if (adx < 65) {
-      if (kill && r < 0.5) { if (this.face(dir)) { p.cdir = { x: dir, y: 0 }; p.press('C'); this.plan = { type: 'holdC', t: (rnd() * 10) | 0 }; } return true; } // ラリアット（アーマー）
-      return false; // 近い：いつもの技えらび
-    }
-    if (adx < 120 && me.state === 'run' && r < 0.6) { p.mx = dir; p.press('A'); return true; }           // 走りこんでショルダータックル（アーマー）
-    if (adx < 190 && adx > 80 && r < 0.25) { p.mx = dir; p.press('B'); return true; }                    // ローリングプレス（つかみながら突進）
-    p.mx = dir; return true;                                                                              // 前へ（待たない）
-  },
-  // 狐（立ち回り6）：ヒット＆アウェイ。瞬歩で一気に差しこみ、当てたらすぐ下がる。遠くからは飛燕（斬撃波）
-  fox(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), edgeBack = Math.abs(me.x - dir * 120) > ST.halfWidth - 20;
-    if (adx > 220) { if (r < 0.4) { if (this.face(dir)) { p.mx = 0; p.press('B'); } return true; } p.mx = dir; return true; } // 飛燕
-    if (adx > 90) { if (r < 0.3 && !(op.state === 'move')) { p.mx = dir; p.press('B'); return true; } if (r < 0.6) { p.mx = dir * 0.5; this.wait = 3; return true; } return false; } // 瞬歩
-    if (adx < 60) { // 当てて、下がる
-      const k = r < 0.4 ? { my: 0, mx: 0 } : r < 0.7 ? { mx: dir * 0.4 } : { my: -1 };
-      if (!this.face(dir)) return true;
-      seqPlan(this, [{ t: 1, mx: k.mx || 0, my: k.my || 0, press: 'A' }, { t: 16 }, { t: edgeBack ? 1 : 10, mx: edgeBack ? 0 : -dir }]); return true;
-    }
-    return false;
-  },
-  // エージェント（立ち回り6）：中距離で撃ち合う。遠い＝ため撃ちか地雷、近づかれたら振り向き散弾銃で下がる、近い＝スピンショット。
-  //   覚醒（80%〜）したら前に出て攻める
-  agent(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (me.awake) return false; // 覚醒中はいつもの攻め
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 90 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), edgeBehind = Math.abs(me.x - dir * 170) > ST.halfWidth - 20;
-    const hasMine = this.b.projectiles.some(q => q.maker === me && q.type === 'mine');
-    if (adx < 75) { if (r < 0.45) { p.mx = 0; p.press('B'); return true; } if (r < 0.7) { if (this.face(dir)) p.press('grab'); return true; } return false; } // スピンショット・つかみ
-    if (adx < 220) {
-      if (!hasMine && r < 0.15) { p.mx = 0; p.my = -1; p.press('B'); return true; }                  // 地雷を置いて下がる
-      if (!edgeBehind && r < 0.55) { seqPlan(this, [{ t: 6 + ((rnd() * 6) | 0), mx: -dir }, { t: 3, mx: -dir, press: 'jump' }, { t: 3, mx: -dir }, { t: 1, mx: dir, press: 'B' }]); return true; } // 振り向き散弾銃
-      return false;
-    }
-    if (!hasMine && r < 0.1) { p.mx = 0; p.my = -1; p.press('B'); return true; }
-    if (!this.face(dir)) return true;
-    p.mx = dir; p.press('B'); this.plan = { type: 'holdB', t: me.moves.sspecial.holdShot.f + 8 + ((rnd() * 35) | 0) }; return true; // ため撃ち（最大ためでしびれ。ふだんは短め）
-  },
-  // ロボ（立ち回り6）：重戦車。どっしり前進して、中距離はブーストタックル（アーマー）、遠いとチャージビーム。
-  robot(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 80 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd();
-    if (adx > 260) { if (r < 0.35) { if (this.face(dir)) { p.mx = 0; p.press('B'); this.plan = { type: 'holdB', t: 20 + ((rnd() * 40) | 0) }; } return true; } p.mx = dir * 0.6; return true; } // チャージビーム
-    if (adx > 110) { if (r < 0.3) { p.mx = dir; p.press('B'); return true; } p.mx = dir * 0.6; return true; } // ブーストタックル・歩いて前進
-    if (adx < 60 && op.percent > 100 && r < 0.4) { if (this.face(dir)) { p.cdir = { x: 0, y: 1 }; p.press('C'); } return true; } // 上スマ
-    return false;
-  },
-  // 猫：氷（立ち回り6）＝速さで出入り。アイススライドで差しこみ、氷のつぶてでけん制。
-  //     炎（立ち回り4）＝どっしり待って、近づいてきた相手に重い一撃
-  cat(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), edgeBack = Math.abs(me.x - dir * 120) > ST.halfWidth - 20;
-    if (!me.form2) {
-      if (adx > 200) { if (r < 0.35) { if (this.face(dir)) { p.mx = 0; p.press('B'); } return true; } p.mx = dir; return true; } // つぶて
-      if (adx > 70) { if (r < 0.35) { p.mx = dir; p.press('B'); return true; } p.mx = dir; return true; }                      // アイススライド
-      if (!this.face(dir)) return true;
-      seqPlan(this, [{ t: 1, mx: r < 0.5 ? 0 : dir * 0.4, press: r < 0.8 ? 'A' : 'grab' }, { t: 14 }, { t: edgeBack ? 1 : 8, mx: edgeBack ? 0 : -dir }]); return true; // 当てて下がる
-    }
-    // 炎：待つ
-    if (adx > 130) { if (r < 0.5) { this.wait = 6 + ((rnd() * 8) | 0); return true; } p.mx = dir * 0.4; return true; }
-    if (adx < 75) { if (op.percent > 80 && r < 0.45) { if (this.face(dir)) { p.cdir = { x: dir, y: 0 }; p.press('C'); } return true; } return false; }
-    if (r < 0.5) { this.plan = { type: 'shield', t: 6 + ((rnd() * 8) | 0) }; return true; }
-    return false;
-  },
-  // 盾使い（立ち回り5）：守ってから返す。遠いとシールドブーメラン、近いとガード多めで様子を見る
-  shield(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), thrown = this.b.projectiles.some(q => q.maker === me && q.type === 'disc' && !q.dead);
-    if (adx > 180 && !thrown && r < 0.35) { if (this.face(dir)) { p.mx = dir; p.press('B'); } return true; } // ブーメラン
-    if (adx < 90 && r < 0.4) { this.plan = { type: 'shield', t: 8 + ((rnd() * 10) | 0) }; return true; }      // ガードで待つ
-    return false;
-  },
-  // スケーター（立ち回り8）：浮かせて空中で追う。下強・風の刃で浮かせたら、追撃はいつものコンボ判断にまかせる（当たったときだけ追う）。
-  //   機動力で出入りして、むやみに突っこまない
-  skater(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), dR = this.reachOfKeys(me, ['dtilt']), edgeBack = Math.abs(me.x - dir * 110) > ST.halfWidth - 20;
-    if (adx < dR) { if (!this.face(dir)) return true; if (r < 0.55) { p.my = -1; p.press('A'); return true; } return false; } // 下強（浮かせ）
-    if (adx < 240) {
-      if (r < 0.3) { if (this.face(dir)) { p.mx = 0; p.press('B'); } return true; }       // 風の刃（浮かせ）
-      if (r < 0.45 && op.state !== 'move') { p.mx = dir; p.press('B'); return true; }     // ウィンドグラインド（差しこみ）
-      if (r < 0.7) { if (!edgeBack) { p.mx = -dir * 0.6; this.wait = 6; } else this.plan = { type: 'shield', t: 8 }; return true; } // 引いて待つ
-      p.mx = dir; this.wait = 4; return true;
-    }
-    p.mx = dir; return true;
-  },
-  // 大剣（立ち回り5）：剣の先を当てる距離を保つ。近すぎたら下がる、ちょうどの距離で横強・横スマ
-  gsword(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const R2 = this.reachOfKeys(me, ['ftilt']), r = rnd(), edgeBack = Math.abs(me.x - dir * 90) > ST.halfWidth - 20;
-    if (adx < R2 * 0.55 && !edgeBack) { p.mx = -dir * 0.7; this.wait = 6; return true; }                         // 近すぎ：下がる
-    if (adx < R2 + 6) { if (!this.face(dir)) return true; if (op.percent > 90 && r < 0.4) { p.cdir = { x: dir, y: 0 }; p.press('C'); } else { p.mx = dir * 0.4; p.press('A'); } return true; } // 先端
-    if (adx < 220 && r < 0.2) { p.mx = dir; p.press('B'); return true; }                                         // 突進斬り（アーマー）
-    p.mx = dir * 0.5; this.wait = 3; return true;
-  },
-  // 鎖鎌（立ち回り7）：遠くからつかむ。ダッシュ攻撃で浮かせて空上。近いと鎖旋風
-  chain(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd(), gR = this.reachOfKeys(me, ['grab']);
-    if (adx < gR - 10 && adx > 70 && op.grounded && op.state !== 'move' && r < 0.15) { if (this.face(dir)) p.press('grab'); return true; } // 遠くからつかむ
-    if (adx < 160 && adx > 70 && me.state === 'run' && r < 0.3) { seqPlan(this, [{ t: 1, mx: dir, press: 'A' }, { t: 16 }, { t: 1, press: 'jump' }, { t: 5 }, { t: 1, my: 1, press: 'A' }]); return true; } // ダッシュ攻撃→空上
-    if (adx < 60 && r < 0.3) { p.mx = 0; p.press('B'); return true; } // 鎖旋風
-    return false;
-  },
-  // 合気道（立ち回り8）：待つ。相手の攻撃を誘って受け流し（react）、近づいたら入り身投げ・つかみ、離れたら気当て
-  aiki(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (!me.grounded || me.state === 'move' || Math.abs(dy) > 70 || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state)) return false;
-    const r = rnd();
-    if (adx < 60) { if (!this.face(dir)) return true; if (op.state === 'shield' || r < 0.4) { p.mx = dir; p.press('B'); return true; } if (r < 0.7) { p.press('grab'); return true; } return false; } // 入り身投げ・つかみ
-    if (adx < 110) { if (r < 0.25) { if (this.face(dir)) { p.mx = 0; p.press('B'); } return true; } this.wait = 4 + ((rnd() * 6) | 0); return true; } // 気当て・待つ
-    if (r < 0.5) { this.wait = 6 + ((rnd() * 8) | 0); return true; }
-    p.mx = dir * 0.4; this.wait = 4; return true;  // ゆっくり近づく
-  },
-  // タコ（立ち回り5）：空中からふわふわ攻める。泡で閉じこめてスマッシュ。飛び道具は泡のバリアで返す
-  tako(op, c) {
-    const { me, p, adx, dy, dir, sk } = c;
-    if (me.state === 'move' || rnd() > sk) return false;
-    if (OPEN_STATES.includes(op.state) && op.state !== 'dizzy') return false;
-    const proj = this.b.projectiles.find(q => q.owner !== me && !q.noHit && !q.dead && Math.abs(q.x - me.x) < 150 && Math.abs(q.y - (me.y - 40)) < 70 && sign(q.vx) === sign(me.x - q.x));
-    if (proj) { p.mx = 0; p.my = -1; p.press('B'); return true; } // 泡のバリア
-    if (!me.grounded) {
-      if (me.state !== 'air') return false;
-      if (adx < 80 && Math.abs(dy) < 80) { p.mx = dir; p.press('A'); return true; }
-      if (me.jumps > 0 && me.vy > 1 && dy < 30 && rnd() < 0.3) { p.mx = dir * 0.5; p.press('jump'); return true; } // ふわふわ浮く
-      p.mx = dir * 0.7; return true;
-    }
-    if (Math.abs(dy) > 80) return false;
-    const r = rnd();
-    if (adx > 110 && adx < 300 && r < 0.3) { if (this.face(dir)) { p.mx = 0; p.press('B'); } return true; } // 泡
-    if (adx < 140 && r < 0.5) { seqPlan(this, [{ t: 1, mx: dir, press: 'jump' }, { t: 4, mx: dir }, { t: 1, mx: dir, press: 'A' }]); return true; } // 小ジャンプ空中攻撃
-    return false;
-  },
-
-  // 弓使い：距離を保って撃つ。近づかれたら「走って離れる→ジャンプ→振り向き剛射」や「後ろへ小ジャンプしながら空中で撃つ」。
-  //   近すぎたら旋矢（横B）・弱・つかみで突き放す。真上の相手には上撃ち、場外の相手には遠くから矢で追い打ち
-  bow(op, c) {
-    const { me, p, adx, dy, dir, opOff, sk } = c;
-    if (me.state === 'move') return false;
-    if (rnd() > sk) return false; // 立ち回りの判断ができなかったときは、いつもの動き
-    // 空中：追いかけてくる相手から離れながら撃つ。攻撃が来たら空中回避
-    if (!me.grounded) {
-      if (me.state !== 'air') return false;
-      const opAtk = op.state === 'move' && op.move && op.move.hits;
-      if (adx < 100 && Math.abs(dy) < 100) {
-        if (opAtk && !me.airDodged && rnd() < 0.6) { p.mx = -dir; p.press('shield'); return true; }
-        if (me.jumps > 0 && dy > 20 && rnd() < 0.4) { p.mx = -dir; p.press('jump'); return true; }   // 下から来る相手：空中ジャンプで逃げる
-        p.mx = 0; p.press('A'); return true;                                                         // 空N
-      }
-      if (adx < 300) { p.mx = -dir; if (me.facing === dir && rnd() < 0.35) { p.mx = 0; p.press('B'); } return true; } // 離れながら空中で撃つ
-      p.mx = dir * 0.3; return true;
-    }
-    const opOpen = OPEN_STATES.includes(op.state);
-    const edgeBehind = Math.abs(me.x - dir * 170) > ST.halfWidth - 20;
-    const approaching = (op.x - me.x) * op.vx < -1.5 || (op.state === 'run' && sign(op.vx) === -dir);
-    const shot = (hold, up) => { if (!up && !this.face(dir)) return true; p.mx = 0; p.my = 0; p.press('B'); this.plan = { type: 'holdB', my: up ? 1 : 0, t: me.moves.nspecial.holdShot.f + 2 + hold }; return true; };
-    // 場外の相手：崖のそばから矢で追い打ち
-    if (opOff && op.state !== 'ledge' && Math.abs(dy) < 220 && adx > 120) return shot(30 + ((rnd() * 60) | 0), dy < -150 && adx < 120);
-    // 真上：上に撃つ
-    if (dy < -120 && adx < 90) return shot(10 + ((rnd() * 40) | 0), true);
-    if (Math.abs(dy) > 90) return false;
-    // 近い：突き放す
-    if (adx < 70) {
-      if (opOpen && op.state !== 'down') return false; // 追撃はいつもの動き（コンボ）
-      if (op.state === 'shield') { if (this.face(dir)) p.press('grab'); return true; }
-      const r = rnd(), kill = op.percent > 95;
-      if (kill && r < 0.45) { if (this.face(dir)) { p.cdir = { x: dir, y: 0 }; p.press('C'); } return true; } // 撃墜％：横スマッシュ
-      if (r < 0.3) { if (this.face(dir)) { p.mx = dir; p.press('B'); } return true; }   // 旋矢：巻きこんで突き飛ばす
-      if (r < 0.55) { if (this.face(dir)) p.press('A'); return true; }                   // 弱（速い）
-      if (r < 0.8) { if (this.face(dir)) p.press('grab'); return true; }                 // つかんで投げ、距離をとる
-      if (!edgeBehind) { seqPlan(this, [{ t: 8, mx: -dir }, { t: 3, mx: -dir, press: 'jump' }, { t: 3, mx: -dir }, { t: 1, mx: dir, press: 'B' }]); return true; }
-      return false;
-    }
-    // 中くらい：近づいてくる相手からは離れながら撃つ
-    if (adx < 230) {
-      if (approaching && adx < 125 && rnd() < 0.55) { // 近づいてくる相手：旋矢で迎え撃つか、ガードして反撃を待つ
-        if (rnd() < 0.6) { if (this.face(dir)) { p.mx = dir; p.press('B'); } return true; }
-        this.plan = { type: 'shield', t: 10 + ((rnd() * 8) | 0) }; return true;
-      }
-      if (approaching || adx < 150) {
-        if (edgeBehind) { p.mx = dir; p.press('jump'); this.plan = { type: 'fullhop', t: 8 }; return true; } // 端：相手を飛びこえる
-        const r = rnd() * (op.percent > 90 ? 0.5 : 1); // 撃墜％なら振り向き剛射（強い）をねらう
-        if (r < 0.45) { seqPlan(this, [{ t: 6 + ((rnd() * 6) | 0), mx: -dir }, { t: 3, mx: -dir, press: 'jump' }, { t: 3, mx: -dir }, { t: 1, mx: dir, press: 'B' }]); return true; } // 走って離れる→ジャンプ→振り向き剛射
-        if (r < 0.8) { if (!this.face(dir)) return true; seqPlan(this, [{ t: 3, mx: -dir, press: 'jump' }, { t: 4, mx: -dir }, { t: 1, mx: -dir * 0.3, press: 'B' }, { t: 10, mx: -dir }]); return true; } // 後ろへ小ジャンプしながら撃つ
-        p.mx = -dir; this.wait = 6; return true;
-      }
-      return shot((rnd() * 20) | 0); // 相手が止まっている：すぐ撃つ
-    }
-    // 遠い：ためて撃つ（遠いほど長く。近づかれたら途中で撃つ）
-    return shot(Math.min(150, ((adx - 200) * 0.25) | 0) + ((rnd() * 30) | 0));
-  },
 };
 class CpuBrain {
   constructor(me, battle, level) {
@@ -2670,6 +2525,8 @@ class CpuBrain {
       return;
     }
     this.watch(op);
+    // タコの墨の中にいる相手は見えない：ほとんど動けない（目くらまし）
+    if (this.b.projectiles.some(q => q.ink && q.cloud && !q.dead && q.maker === op && Math.hypot(op.x - q.x, (op.y - 40) - q.y) < q.r + 12) && rnd() < 0.85) { p.mx = 0; p.my = 0; return; }
     // 読み合い（毎フレーム）：ため技のキャンセル・ガード・回避・スキへの反撃。うまさは「CPUの強さ × キャラの立ち回り」
     if (this.react(op)) return;
     if (this.plan) {
@@ -2741,10 +2598,16 @@ class CpuBrain {
     this.ledgeWait = -1;
     if (this.recover()) return;
     // 姿を切りかえるキャラ（猫）：相手が遠いときに、ときどき下Bで氷⇔炎を切りかえる（相手が弱っていれば炎、元気なら氷）
-    if (me.cForm2 && me.state === 'idle' && Math.abs(op.x - me.x) > 200 && (this.formCd = (this.formCd || 0) - 1) <= 0) {
-      this.formCd = 240 + ((rnd() * 240) | 0);
-      const wantFire = op.percent > 70;
-      if (wantFire !== !!me.form2 && rnd() < 0.7) { p.mx = 0; p.my = -1; p.press('B'); return; }
+    //   ・低い％：氷（速さで動き回ってダメージを稼ぐ）／撃墜％：炎（重い一撃で決める）
+    //   ・切りかえるのは安全なとき（相手が遠い・吹っ飛んでいる・場外）。立ち回りがうまいほど上手に切りかえる
+    if (me.cForm2 && (me.state === 'idle' || me.state === 'walk' || me.state === 'run' || me.state === 'air') && (this.formCd = (this.formCd || 0) - 1) <= 0) {
+      const adx2 = Math.abs(op.x - me.x), opFly = op.state === 'tumble' || op.state === 'hitstun' || op.state === 'helpless' || op.state === 'ledge' || Math.abs(op.x) > ST.halfWidth;
+      const safe = adx2 > 170 || (opFly && adx2 > 90) || op.state === 'down';
+      if (safe) {
+        this.formCd = 50 + ((rnd() * 60) | 0);
+        const wantFire = op.percent > 85 || (op.percent > 60 && me.percent > 110);
+        if (wantFire !== !!me.form2 && rnd() < 0.4 + this.skill() * 0.6) { p.mx = 0; p.my = -1; p.press('B'); return; }
+      }
     }
     // 相手がのけぞっている間は、すぐ追撃を考える（強いほど上手）
     const opStun = op.state === 'hitstun' || op.state === 'tumble';
@@ -2787,7 +2650,7 @@ class CpuBrain {
     const myR = this.reachOfKeys(me, ['ftilt', 'jab', 'dtilt']), opR = this.reachOfKeys(op, ['ftilt', 'jab', 'dtilt', 'dashAttack']);
     const edgeBack = Math.abs(me.x - dir * 110) > ST.halfWidth - 20;
     const close = adx < 52, poke = adx <= myR + 6, mid = adx < 230;
-    const kill = op.percent > 100;
+    const kill = op.percent > 90; // 撃墜できそうな％：スマッシュ（特に横）をねらう
     const opAir = !op.grounded && dy < -40 && dy > -220 && adx < 110;
     const O = [];
     const add = (k, w, run) => O.push({ k, w, run });
@@ -2803,7 +2666,7 @@ class CpuBrain {
       add('crossRoll', (nt ? 0.8 : 0.4) + H.swing * 1.5, () => { p.held.shield = true; p.mx = dir; this.plan = { type: 'shield', t: 2 }; });
       add('spotBait', (nt ? 0.6 : 0.3) + H.swing, () => { p.held.shield = true; p.my = -1; this.plan = { type: 'shield', t: 2 }; });
       add('shieldWait', (brk ? 0.5 : 2) + H.swing * 3, () => { this.plan = { type: 'shield', t: 8 + ((rnd() * 10) | 0) }; });
-      if (kill) add('smash', brk ? 3 : 2, () => { if (face()) { const u = opAir || rnd() < 0.3; p.cdir = { x: u ? 0 : dir, y: u ? 1 : 0 }; p.press('C'); } });
+      if (kill) add('smash', brk ? 6 : 4.5, () => { if (face()) { const u = opAir || rnd() < 0.3; p.cdir = { x: u ? 0 : dir, y: u ? 1 : 0 }; p.press('C'); } });
     } else if (poke) {
       add('ftilt', 2.5, () => { if (face()) { p.mx = dir * 0.4; p.press('A'); } });
       add('dtiltPoke', 1.2, () => { if (face()) { p.my = -1; p.press('A'); } });
@@ -2811,7 +2674,7 @@ class CpuBrain {
       add('backOff', (brk ? 0.4 : 1.2) + H.swing * 2.5, () => { if (!edgeBack) { p.mx = -dir * 0.7; this.wait = 6 + ((rnd() * 6) | 0); } else this.plan = { type: 'shield', t: 8 }; });
       add('shieldWait', (brk ? 0.4 : 1.6) + H.swing * 3, () => { this.plan = { type: 'shield', t: 8 + ((rnd() * 10) | 0) }; });
       add('stepGrab', 0.8 + H.shield * 5, () => { seqPlan(this, [{ t: 4, mx: dir }, { t: 1, press: 'grab' }]); });
-      if (kill) add('smash', brk ? 2.5 : 1.5, () => { if (face()) { p.cdir = { x: dir, y: 0 }; p.press('C'); } });
+      if (kill) add('smash', brk ? 5 : 3.5, () => { if (face()) { p.cdir = { x: dir, y: 0 }; p.press('C'); } });
     } else if (mid) {
       add('dashAttack', brk ? 2.4 : 1.2, () => { seqPlan(this, [{ t: Math.max(3, Math.round((adx - 60) / Math.max(4, me.s.run))), mx: dir }, { t: 1, mx: dir, press: 'A' }]); });
       add('dashGrab', 1 + H.shield * 5, () => { seqPlan(this, [{ t: Math.max(3, Math.round((adx - 40) / Math.max(4, me.s.run))), mx: dir }, { t: 1, mx: dir, press: 'grab' }]); });
@@ -2833,6 +2696,40 @@ class CpuBrain {
       const o = this.pick(O); if (!o) return false;
       if (o.k === 'sig') { o.w = 0; if (sig.call(this, op, Object.assign({}, c, { me, p }))) { this.remember('sig'); return true; } continue; }
       o.run(); this.remember(o.k); return true;
+    }
+    return false;
+  }
+  // 復帰阻止。動いたら true
+  edgeguard(op, c) {
+    const me = this.me, p = this.pad, { adx, dy, dir } = c;
+    if (!op.alive || op.invuln > 0 || op.state === 'ledge' || op.state === 'ledgeClimb') { this.egShots = 0; return false; }
+    const sk = this.skill(), cpu = me.c.cpu || {};
+    // 得意さ：復帰力・空中ジャンプ・飛び道具・キャラごとの得意（egW）
+    const projN = me.moves.nspecial && (me.moves.nspecial.holdShot || (me.moves.nspecial.events && me.moves.nspecial.events.some(e => e.proj)));
+    const projS = me.moves.sspecial && (me.moves.sspecial.holdShot || (me.moves.sspecial.events && me.moves.sspecial.events.some(e => e.proj)));
+    const rec = (me.s.recoveryMul || 1) + ((me.s.airJumps || 1) >= 3 ? 0.3 : 0); // 復帰力（上Bの高さ）＋空中ジャンプが多いキャラ
+    const skill = sk * (cpu.egW ?? 1);
+    if (!me.grounded) return false;
+    const edgeX = sign(op.x) * ST.halfWidth, toEdge = Math.abs(edgeX - me.x), side = sign(op.x);
+    if (side !== sign(me.x || side) && toEdge > 200) { p.mx = side; return true; } // 反対側にいる：崖へ向かう
+    // ① 飛び道具で撃つ（崖のそばから）
+    // 1回の復帰につき2発まで（撃ちっぱなしで、相手が戻れなくならないように）。空中で叩きに行くのが得意なキャラ（egW）は撃つより飛び出す
+    if ((projN || projS) && (this.egShots || 0) < 2 && Math.abs(dy) < 200 && adx > 90 && rnd() < sk * 0.35) {
+      this.egShots = (this.egShots || 0) + 1;
+      if (me.facing !== side) { p.mx = side * 0.5; this.wait = 1; return true; }
+      if (projN) { p.mx = 0; p.press('B'); if (me.moves.nspecial.holdShot) this.plan = { type: 'holdB', my: dy < -150 && adx < 120 ? 1 : 0, t: me.moves.nspecial.holdShot.f + 10 + ((rnd() * 30) | 0) }; }
+      else { p.mx = side; p.press('B'); if (me.moves.sspecial.holdShot) this.plan = { type: 'holdB', t: me.moves.sspecial.holdShot.f + 10 + ((rnd() * 25) | 0) }; }
+      return true;
+    }
+    // ② ステージの外まで出て空中攻撃（復帰力がある・空中ジャンプが残っているときだけ）
+    const opBeyond = Math.abs(op.x) - ST.halfWidth;
+    // 深追いはしない：崖から近い相手だけ。ステージのジャンプで飛び出し、1回叩いたら空中ジャンプで戻る
+    if (!D.cpu.noChase && rec >= 1.15 && me.jumps > 0 && opBeyond > 20 && opBeyond < 150 && dy > -120 && dy < 120 && toEdge < 110 && rnd() < skill * 0.55 * Math.min(1.5, rec)) {
+      const runT = Math.max(1, Math.round((toEdge - 18) / Math.max(4, me.s.run)));
+      const low = dy > 50;
+      seqPlan(this, [{ t: runT, mx: side }, { t: 1, mx: side, press: 'jump' }, { t: low ? 8 : 5, mx: side }, { t: 1, mx: low ? 0 : side, my: low ? -1 : 0, press: 'A' },
+                     { t: 8, mx: -side }, { t: 1, mx: -side, press: 'jump' }, { t: 14, mx: -side }]);
+      return true;
     }
     return false;
   }
@@ -2911,7 +2808,7 @@ class CpuBrain {
       this.punInst = op.moveInst + op.state;
       const reachT = adx / Math.max(3, me.s.run);
       if (reachT < rem - 3 && adx < 330 && rnd() < sk * 0.9) {
-        if (adx < 55) { if (me.facing !== dir) p.mx = dir * 0.3; p.press(rnd() < 0.5 ? 'grab' : 'A'); }
+        if (adx < 55) { if (me.facing !== dir) p.mx = dir * 0.3; if (op.percent > 90 && rnd() < 0.7) { p.cdir = { x: dir, y: 0 }; p.press('C'); } else p.press(rnd() < 0.5 ? 'grab' : 'A'); } // 撃墜％ならスマッシュで反撃
         else this.plan = { type: 'runPunish', t: Math.ceil(reachT) + 6 };
         return true;
       }
@@ -2944,6 +2841,11 @@ class CpuBrain {
       const tx = under ? sign(me.x || 1) * (R + 70) : (me.x < 0 ? L + 30 : R - 30), ty = under ? me.y - 20 : -40;
       const ex = tx - me.x, ey = ty - me.y, l = Math.hypot(ex, ey) || 1;
       p.held.B = true; p.mx = ex / l; p.my = -ey / l; return true;
+    }
+    // 8方向に動く上B：崖の少し上をねらってスティックを向ける
+    if (me.state === 'move' && me.move.dash8) {
+      const ex = (me.x < 0 ? L : R) - toward * 6, ey = -30, vx = ex - me.x, vy = -(ey - me.y), l = Math.hypot(vx, vy) || 1;
+      p.mx = vx / l; p.my = vy / l; return true;
     }
     if (me.state !== 'air') return true;
     const distEdge = Math.max(0, me.x < 0 ? L - me.x : me.x - R);
@@ -3089,6 +2991,9 @@ class CpuBrain {
       if (this.face(dir)) { if (op.downT > PH.downMinTime - 4) { p.cdir = { x: dir, y: 0 }; p.press('C'); } else { p.my = -1; p.press('A'); } }
       return;
     }
+    // 相手が場外：復帰阻止（飛び道具で撃つ・ステージの外まで出て空中攻撃）。得意なキャラほど積極的
+    if (!opOff) this.egShots = 0;
+    if (opOff && this.edgeguard(op, { adx, dy, dir })) return;
     // 相手が場外：崖のそばで待つ
     if (opOff) {
       if (nearEdge && sign(me.x) === sign(op.x)) {
@@ -3402,7 +3307,7 @@ class Battle {
       noDouble: !!ev.noDouble, elem: base.elem, // 同じ技の打撃が当たった相手には当たらない（打撃のふっとびを消さないため）
       links: base.links || 0, linkDmg: (base.linkDmg || 0) * (owner.s.dmgMul || 1), nh: 0,
       fkb: base.fkb, react: base.react, rehit: base.rehit || 0, arm: base.arm || 0, cloudR: base.cloudR,
-      cloudLife: base.cloudLife || 120, boom: base.boom || 90, pierce: !!base.pierce, trap: base.trap || 0 };
+      cloudLife: base.cloudLife || 120, boom: base.boom || 90, pierce: !!base.pierce, trap: base.trap || 0, instant: !!base.instant, ink: !!base.ink };
     if (hs) o.grav = (base.grav || 0) * (shotGrav !== null ? shotGrav : (1 - power * 0.8));
     if (base.type === 'arrow') SFX.play('shoot', power);
     if (base.type === 'bullet') SFX.play('gun', power);
@@ -3685,9 +3590,9 @@ class Battle {
       d.hitlag = hl; if (!isProj) a.hitlag = hl + 12;
       d.state = 'shield'; d.shieldUpAt = -99; d.timer = 0; d.kbx = 0;
       if (!d.pad || !d.pad.held.shield) { d.state = 'idle'; }
-      this.fx.ring(d.x, d.y - 48, '#ffffff', 70); this.fx.ring(d.x, d.y - 48, '#9fe8ff', 44);
-      this.fx.text(d.x, d.y - 110 * (d.look.scale || 1), 'ジャストガード！', '#9fe8ff');
-      this.flash = Math.max(this.flash, 2);
+      // 文字は出さない。シールドが一瞬キラッと光るだけ
+      d.parryGlint = 7; this.parries = (this.parries || 0) + 1;
+      this.fx.spark(wx, wy, 18, '#ffffff');
       SFX.play('parry');
       if (proj && proj.type !== 'smoke' && proj.type !== 'beam') proj.dead = true;
       return;
@@ -3706,6 +3611,15 @@ class Battle {
       if (proj && proj.type !== 'smoke') proj.dead = true;
       return;
     }
+    // 弱連打の制限：弱の最後の一発（次につながらない弱）を受けたあと、少しの間は同じ相手の弱でひるまない（連打だけでダメージを稼げないように）
+    const jabK = !isProj && a.move && /^jab[23]?$/.test(a.move.key);
+    if (jabK && d.jabLockBy === a && d.jabLockT > 0) {
+      d.percent = Math.min(999, d.percent + dmg * 0.5);
+      d.hitlag = 3; a.hitlag = 3; d.hitFlash = 3;
+      this.fx.spark(wx, wy, 10, '#ffffff');
+      return;
+    }
+    if (jabK && !a.move.next) { d.jabLockBy = a; d.jabLockT = 45; }
     // アーマー（ダメージは受けるが、ひるまない）
     if (d.activeWindow('armorW')) {
       d.percent = Math.min(999, d.percent + dmg);
@@ -3970,6 +3884,65 @@ function resize() {
   if (window.Render3D && window.Render3D.ready) window.Render3D.resize(view);
 }
 
+/* ---------- ボタン配置の設定（位置と大きさ。この端末に保存） ---------- */
+const CTRL_DEF = JSON.parse(JSON.stringify(D.controls));
+function applyCtrl(sv) {
+  const C = D.controls, d = CTRL_DEF;
+  for (const k in d.buttons) Object.assign(C.buttons[k], d.buttons[k], (sv && sv.buttons && sv.buttons[k]) || {});
+  Object.assign(C.cstick, d.cstick, (sv && sv.cstick) || {});
+  C.stickRadius = (sv && sv.stickRadius) || d.stickRadius;
+}
+function openButtonEditor() {
+  const C = D.controls, W = view.w, H = view.h, ins = view.inset;
+  const work = { buttons: {}, cstick: Object.assign({}, C.cstick), stickRadius: C.stickRadius };
+  for (const k in C.buttons) work.buttons[k] = Object.assign({}, C.buttons[k]);
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(10,14,24,.72);touch-action:none;font-family:sans-serif;color:#fff';
+  ov.innerHTML = `<div style="position:absolute;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);text-align:center;font-size:13px;line-height:1.5;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:12px">
+    ボタンを指で動かして、置きたい場所へ。ボタンをタッチして選び、下のバーで大きさを変えます</div>
+    <div id="beBar" style="position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 62px);transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:14px;font-size:12px;flex-wrap:nowrap;justify-content:center;white-space:nowrap">
+      <span id="beSel">A</span><input id="beSize" type="range" min="0.6" max="1.8" step="0.05" style="width:130px">
+      <span>移動スティック</span><input id="beStick" type="range" min="0.6" max="1.6" step="0.05" style="width:100px">
+      <button id="beReset" class="btn" style="padding:6px 10px;font-size:13px;width:auto;min-width:0;margin:0">元に戻す</button><button id="beSave" class="btn primary" style="padding:6px 12px;font-size:13px;width:auto;min-width:0;margin:0">保存して閉じる</button></div>`;
+  document.body.appendChild(ov);
+  const keys = Object.keys(work.buttons).concat('cstick');
+  const get = k => (k === 'cstick' ? work.cstick : work.buttons[k]);
+  const def = k => (k === 'cstick' ? CTRL_DEF.cstick : CTRL_DEF.buttons[k]);
+  const els = {};
+  let sel = 'A';
+  const place = k => { const b = get(k), e = els[k], x = W - ins.r - b.right, y = H - ins.b - b.bottom;
+    Object.assign(e.style, { left: (x - b.r) + 'px', top: (y - b.r) + 'px', width: b.r * 2 + 'px', height: b.r * 2 + 'px', fontSize: Math.max(10, b.r * 0.42) + 'px' });
+    e.style.outline = k === sel ? '3px solid #ffd84a' : 'none'; };
+  const stickEl = document.createElement('div');
+  const placeStick = () => { const r = work.stickRadius, x = ins.l + 30 + r + 14, y = H - ins.b - r - 34;
+    Object.assign(stickEl.style, { position: 'absolute', left: (x - r) + 'px', top: (y - r) + 'px', width: r * 2 + 'px', height: r * 2 + 'px', borderRadius: '50%', border: '2px dashed rgba(255,255,255,.6)', pointerEvents: 'none' }); };
+  ov.appendChild(stickEl); placeStick();
+  for (const k of keys) {
+    const e = document.createElement('div'); els[k] = e;
+    e.textContent = get(k).label; e.style.cssText = 'position:absolute;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none';
+    ov.appendChild(e); place(k);
+    let drag = null;
+    const down = (cx, cy) => { sel = k; drag = { cx, cy, r0: get(k).right, b0: get(k).bottom }; syncBar(); keys.forEach(place); };
+    const move = (cx, cy) => { if (!drag) return; const b = get(k); b.right = clamp(drag.r0 - (cx - drag.cx), b.r, W - b.r); b.bottom = clamp(drag.b0 - (cy - drag.cy), b.r, H - b.r); place(k); };
+    e.addEventListener('touchstart', ev => { ev.preventDefault(); const t = ev.changedTouches[0]; down(t.clientX, t.clientY); }, { passive: false });
+    e.addEventListener('touchmove', ev => { ev.preventDefault(); const t = ev.changedTouches[0]; move(t.clientX, t.clientY); }, { passive: false });
+    e.addEventListener('touchend', () => { drag = null; });
+    e.addEventListener('mousedown', ev => { down(ev.clientX, ev.clientY); const mm = q => move(q.clientX, q.clientY), mu = () => { drag = null; window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); }; window.addEventListener('mousemove', mm); window.addEventListener('mouseup', mu); });
+  }
+  const size = ov.querySelector('#beSize'), stick = ov.querySelector('#beStick');
+  const syncBar = () => { ov.querySelector('#beSel').textContent = get(sel).label + 'の大きさ'; size.value = (get(sel).r / def(sel).r).toFixed(2); };
+  size.addEventListener('input', () => { get(sel).r = Math.round(def(sel).r * +size.value); place(sel); });
+  stick.value = (work.stickRadius / CTRL_DEF.stickRadius).toFixed(2);
+  stick.addEventListener('input', () => { work.stickRadius = Math.round(CTRL_DEF.stickRadius * +stick.value); placeStick(); });
+  ov.querySelector('#beReset').addEventListener('click', () => { for (const k of keys) Object.assign(get(k), def(k)); work.stickRadius = CTRL_DEF.stickRadius; stick.value = 1; keys.forEach(place); placeStick(); syncBar(); });
+  ov.querySelector('#beSave').addEventListener('click', () => {
+    const sv = { buttons: {}, cstick: { right: work.cstick.right, bottom: work.cstick.bottom, r: work.cstick.r }, stickRadius: work.stickRadius };
+    for (const k in work.buttons) sv.buttons[k] = { right: work.buttons[k].right, bottom: work.buttons[k].bottom, r: work.buttons[k].r };
+    store.set('btnLayout', sv); applyCtrl(sv); controls.layout(); layers.dirty = true; ov.remove();
+  });
+  syncBar();
+}
+
 class TouchControls {
   constructor() {
     this.pad = null; this.btns = {}; this.cs = null;
@@ -4024,7 +3997,7 @@ class TouchControls {
       }
       const best = this.nearest(x, y, 2.0);
       if (best === '__C') {
-        this.cTouch = { id: t.identifier, fired: false };
+        this.cTouch = { id: t.identifier, fired: false, sx: x, sy: y }; // 指を置いた場所からはじいた向きでスマッシュ
         this.updateC(x, y);
       } else if (best) {
         this.btnTouches.set(t.identifier, best);
@@ -4058,7 +4031,11 @@ class TouchControls {
     if (!this.pad) return;
     for (const t of e.changedTouches) {
       if (this.stick && t.identifier === this.stick.id) { this.stick = null; this.pad.mx = 0; this.pad.my = 0; }
-      else if (this.cTouch && t.identifier === this.cTouch.id) { this.cTouch = null; this.cs.kx = this.cs.ky = 0; this.pad.held.C = false; }
+      else if (this.cTouch && t.identifier === this.cTouch.id) {
+        // はじかずに指を離した（タップ）：移動スティックの向き（なければ今の向き）にスマッシュ
+        if (!this.cTouch.fired) { this.pad.cdir = { x: Math.abs(this.pad.mx) > 0.3 ? sign(this.pad.mx) : 0, y: 0 }; this.pad.press('C'); }
+        this.cTouch = null; this.cs.kx = this.cs.ky = 0; this.pad.held.C = false;
+      }
       else if (this.btnTouches.has(t.identifier)) {
         const k = this.btnTouches.get(t.identifier);
         this.btnTouches.delete(t.identifier);
@@ -4078,7 +4055,8 @@ class TouchControls {
     this.pad.my = m > 0.12 ? -Math.sin(a) * m : 0;
   }
   updateC(x, y) {
-    const c = this.cs, dx = x - c.x, dy = y - c.y, m = Math.min(1, Math.hypot(dx, dy) / c.r);
+    // Cスティック：指を置いた場所から、はじいた向きに出す（置いた場所が中心からずれていても、はじいた向きが正しく伝わる）
+    const c = this.cs, t0 = this.cTouch || { sx: c.x, sy: c.y }, dx = x - t0.sx, dy = y - t0.sy, m = Math.min(1, Math.hypot(dx, dy) / (c.r * 0.8));
     const a = Math.atan2(dy, dx);
     c.kx = Math.cos(a) * m; c.ky = Math.sin(a) * m;
     if (m > 0.5 && !this.cTouch.fired) {
@@ -4096,10 +4074,77 @@ class TouchControls {
     if (this.pad) this.pad.clear();
   }
 }
+applyCtrl(store.get('btnLayout', null)); // 保存したボタン配置
 const controls = new TouchControls();
 
 // パソコン確認用のキーボード操作（WASD=移動、J=A、K=B、スペース=ジャンプ、L=シールド、H=つかみ、矢印=C）
 const keys = new Set();
+/* ---------- コントローラー（Switchのプロコン・Joy-Con、ほかのゲームパッド）----------
+   iPhone（iOS 16〜）やPCにBluetoothでつなぐと使える。ブラウザの Gamepad API で読む
+   ボタンの位置（標準の並び）：0=下（Switchの B）1=右（A）2=左（Y）3=上（X）4=L 5=R 6=ZL 7=ZR 8=− 9=＋ 12〜15=十字キー
+   スマブラと同じ並び：A＝攻撃 / B＝必殺技 / X・Y＝ジャンプ / L・R＝つかみ / ZL・ZR＝シールド / 右スティック＝スマッシュ / ＋・−＝ポーズ */
+const GP_BTN = { 1: 'A', 0: 'B', 2: 'jump', 3: 'jump', 4: 'grab', 5: 'grab', 6: 'shield', 7: 'shield' };
+const GP = { prev: [], cOn: false, active: false, focus: null, navT: 0, toastT: 0 };
+function gpPad() { const list = navigator.getGamepads ? navigator.getGamepads() : []; for (const g of list) if (g && g.connected) return g; return null; }
+function gpAxis(g, i) { return g.axes && g.axes.length > i ? g.axes[i] : 0; }
+function gpDown(g, i) { const b = g.buttons[i]; return !!b && (b.pressed || b.value > 0.5); }
+function pollGamepad() {
+  const g = gpPad();
+  if (!g) { if (GP.active) { GP.active = false; } return; }
+  if (!GP.active) { GP.active = true; gpToast('コントローラーをつなぎました'); }
+  const now = g.buttons.map((_, i) => gpDown(g, i));
+  const pressed = i => now[i] && !GP.prev[i];
+  // 左スティック（細かい倒し具合をそのまま使う）。十字キーでも動ける
+  let lx = gpAxis(g, 0), ly = -gpAxis(g, 1);
+  const lm = Math.hypot(lx, ly);
+  if (lm < 0.12) { lx = 0; ly = 0; } else { const k = Math.min(1, (lm - 0.12) / 0.83) / lm; lx *= k; ly *= k; } // 中心のあそびを取って、0〜1に広げる
+  if (now[14] || now[15] || now[12] || now[13]) { lx = (now[15] ? 1 : 0) - (now[14] ? 1 : 0); ly = (now[12] ? 1 : 0) - (now[13] ? 1 : 0); }
+  const p = controls.pad, inBattle = !!(p && state.battle && !state.paused);
+  if (inBattle) {
+    if (lx || ly || GP.stickUsed) { p.mx = lx; p.my = ly; GP.stickUsed = !!(lx || ly); }
+    for (const i in GP_BTN) { const k = GP_BTN[i]; if (pressed(+i)) p.press(k); }
+    for (const k of ['A', 'B', 'jump', 'grab', 'shield']) { let h = false; for (const i in GP_BTN) if (GP_BTN[i] === k && now[+i]) h = true; if (h) p.held[k] = true; else if (GP.held && GP.held[k]) p.held[k] = false; }
+    GP.held = {}; for (const i in GP_BTN) if (now[+i]) GP.held[GP_BTN[i]] = true;
+    // 右スティック＝スマッシュ（倒した方向に出す）
+    const rx = gpAxis(g, 2), ry = -gpAxis(g, 3), rm = Math.hypot(rx, ry);
+    if (rm > 0.55 && !GP.cOn) { GP.cOn = true; p.cdir = { x: rx, y: ry }; p.press('C'); }
+    if (rm < 0.3) GP.cOn = false;
+    if (rm > 0.4) p.held.C = true; else if (GP.cWas) p.held.C = false;
+    GP.cWas = rm > 0.4;
+    if ((pressed(9) || pressed(8)) && controls.onPause) controls.onPause();
+  } else gpMenu(g, now, pressed, lx, ly);
+  GP.prev = now;
+}
+// メニュー：スティック・十字キーで選んで、Aで決定・Bで戻る
+function gpMenu(g, now, pressed, lx, ly) {
+  const scr = document.querySelector('.screen.show') || ($('opening') && $('opening').offsetParent ? $('opening') : null);
+  if (!scr) return;
+  const items = [...scr.querySelectorAll('button, .card, .stg > *, [data-v]')].filter(e => e.offsetParent && !e.disabled);
+  if (!items.length) return;
+  if (!items.includes(GP.focus)) { gpFocus(scr.querySelector('.btn.primary') && items.includes(scr.querySelector('.btn.primary')) ? scr.querySelector('.btn.primary') : items[0]); }
+  if (GP.navT > 0) GP.navT--;
+  if ((Math.abs(lx) > 0.5 || Math.abs(ly) > 0.5) && GP.navT <= 0) {
+    GP.navT = 12;
+    const r0 = GP.focus.getBoundingClientRect(), cx = r0.x + r0.width / 2, cy = r0.y + r0.height / 2;
+    const dx = Math.abs(lx) > Math.abs(ly) ? Math.sign(lx) : 0, dy = dx ? 0 : -Math.sign(ly);
+    let best = null, bs = Infinity;
+    for (const e of items) { if (e === GP.focus) continue; const r = e.getBoundingClientRect(), ex = r.x + r.width / 2 - cx, ey = r.y + r.height / 2 - cy;
+      const along = ex * dx + ey * dy; if (along <= 4) continue; const side = Math.abs(ex * dy) + Math.abs(ey * dx); const sc = along + side * 2.5; if (sc < bs) { bs = sc; best = e; } }
+    if (best) gpFocus(best);
+  }
+  if (Math.abs(lx) < 0.3 && Math.abs(ly) < 0.3) GP.navT = 0;
+  if (pressed(1) || pressed(9)) { if (GP.focus) GP.focus.click(); else if ($('opTap')) $('opTap').click(); }
+  if (pressed(0)) { for (const id of ['btnBack', 'btnResume', 'btnResSelect']) { const b = $(id); if (b && b.offsetParent) { b.click(); break; } } }
+}
+function gpFocus(e) { if (GP.focus) GP.focus.classList.remove('gp-focus'); GP.focus = e; if (e) { e.classList.add('gp-focus'); if (e.scrollIntoView) e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } }
+function gpToast(t) {
+  let el = $('gpToast');
+  if (!el) { el = document.createElement('div'); el.id = 'gpToast'; el.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:6px 14px;border-radius:14px;font:600 13px sans-serif;z-index:99;pointer-events:none;transition:opacity .4s'; document.body.appendChild(el); }
+  el.textContent = t; el.style.opacity = 1; clearTimeout(GP.toastT); GP.toastT = setTimeout(() => { el.style.opacity = 0; }, 2200);
+}
+window.addEventListener('gamepadconnected', () => gpToast('コントローラーをつなぎました'));
+window.addEventListener('gamepaddisconnected', () => gpToast('コントローラーが外れました'));
+
 const KEYMAP = { KeyJ: 'A', KeyK: 'B', Space: 'jump', KeyL: 'shield', KeyH: 'grab' };
 const CKEYS = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 window.addEventListener('keydown', e => {
@@ -4490,7 +4535,7 @@ function drawProjectile(p, alpha, X, Y, z) {
     ctx.fillStyle = p.armed && Math.floor(p.age / 15) % 2 === 0 ? '#ff4040' : '#702020';
     ctx.beginPath(); ctx.arc(x, y - 8 * z, 2.5 * z, 0, Math.PI * 2); ctx.fill();
   } else if (p.type === 'smoke') {
-    if (p.cloud) { ctx.fillStyle = 'rgba(170,176,196,0.45)'; ctx.beginPath(); ctx.arc(x, y - 30 * z, p.r * z, 0, Math.PI * 2); ctx.fill(); }
+    if (p.cloud) { ctx.fillStyle = p.ink ? 'rgba(26,18,38,0.88)' : 'rgba(170,176,196,0.45)'; ctx.beginPath(); ctx.arc(x, y - 30 * z, p.r * z, 0, Math.PI * 2); ctx.fill(); }
     else { ctx.fillStyle = '#3a3f4c'; ctx.beginPath(); ctx.arc(x, y, 6 * z, 0, Math.PI * 2); ctx.fill(); }
   } else if (p.type === 'shock') {
     const h = (22 + Math.sin(p.age * 0.8) * 5) * z;
@@ -4894,6 +4939,7 @@ $('btnResume').addEventListener('click', () => { state.paused = false; show(null
 $('btnBgm').addEventListener('click', () => { SFX.setMusic(!SFX.musicOn); updateMenuLabels(); });
 $('btnRestart').addEventListener('click', startBattle);
 $('btnToSelect').addEventListener('click', () => { state.battle = null; state.screen = 'select'; buildCards(); show('select'); });
+$('btnLayout').addEventListener('click', openButtonEditor);
 $('btnFps').addEventListener('click', () => { state.showFps = !state.showFps; store.set('showFps', state.showFps); updateMenuLabels(); });
 $('btnAgain').addEventListener('click', startBattle);
 $('btnResSelect').addEventListener('click', () => { state.battle = null; state.screen = 'select'; buildCards(); show('select'); });
@@ -4904,6 +4950,7 @@ updateMenuLabels();
 let acc = 0, last = performance.now(), fpsCount = 0, fpsT = 0, fpsNow = 60, lowT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  try { pollGamepad(); } catch (e) { /* コントローラーが読めないときは何もしない */ }
   let dt = (now - last) / 1000; last = now;
   if (dt > 0.25) dt = 0.25;
   if (Math.abs(dt - STEP) < 0.002) dt = STEP; // 画面の更新タイミングのゆれをならす

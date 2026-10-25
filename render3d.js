@@ -380,7 +380,7 @@ function updateRig(rig, f, alpha, G) {
     if (twOn) {
       const sc = rig.mr ? 0.75 : 1, fast = f.activeHits().length > 0;
       rig.twirl.position.set(bH3.x, bH3.y, bH3.z + 2); rig.twirl.scale.setScalar(sc);
-      const thrust = f.mf >= 30; // 最後は回すのをやめて、矢の先で突く
+      const thrust = f.mf >= (twm[2] ?? 30); // 最後は回すのをやめて、矢の先で突く（空後は最初から突く）
       if (thrust) rig.twirlSpin.rotation.z = Math.atan2(bH3.y - fH3.y, bH3.x - fH3.x) - Math.PI / 2;
       else rig.twirlSpin.rotation.z = -performance.now() / (fast ? 22 : 45);
       rig.twirlBlur.visible = !thrust;
@@ -436,7 +436,8 @@ function updateRig(rig, f, alpha, G) {
     const ck = [0.7, 1, 1.5][f.chainMode || 0];
     rig.wire.userData.r = ck; rig.hook.scale.setScalar(ck);
   }
-  if (rig.hat) {
+  if (rig.hat && rig.mr) { rig.hat.visible = false; rig.phones.forEach(p => { p[0].visible = false; }); rig.tents.forEach(t => t.forEach(sg => { sg.visible = false; })); } // 3Dモデルがあるときは、モデルのかさと触手を使う
+  else if (rig.hat) {
     // かさ：頭の上。触手：かさのふちから下へ、ゆらゆら（動いた方向と逆に流れる）
     const sc = f.look.scale || 1, hd = P.head || V(pts.head, 0), t = performance.now() / 1000;
     rig.hat.position.set(hd.x, hd.y + 4 * sc, 0);
@@ -481,6 +482,7 @@ function updateRig(rig, f, alpha, G) {
   if (rig.skates) {
     const feet = [[P.fK, P.fF], [P.bK, P.bF]];
     rig.fFt.visible = rig.bFt.visible = false;
+    rig.skates.forEach(sk => { sk.visible = !rig.mr; }); // 3Dモデルがあるときは、モデルのローラーブレードを使う
     rig.skates.forEach((sk, k) => {
       const [kn, an] = feet[k];
       const a = Math.atan2(an.y - kn.y, an.x - kn.x) + Math.PI / 2;
@@ -528,8 +530,15 @@ function updateRig(rig, f, alpha, G) {
     }
   }
   // シールド
-  if (f.state === 'shield' || f.state === 'shieldstun') {
+  if (f.state === 'shield' || f.state === 'shieldstun' || f.parryGlint > 0) {
     rig.bubble.visible = true;
+    // ジャストガード：シールドが一瞬白くキラッと光る
+    const bm = rig.bubble.material;
+    if (bm && bm.color) {
+      if (!bm.userData.c0) bm.userData.c0 = { c: bm.color.clone(), o: bm.opacity };
+      if (f.parryGlint > 0) { const k = f.parryGlint / 7; bm.color.copy(bm.userData.c0.c).lerp(new THREE.Color(0xffffff), k); bm.opacity = Math.min(1, bm.userData.c0.o + 0.45 * k); }
+      else { bm.color.copy(bm.userData.c0.c); bm.opacity = bm.userData.c0.o; }
+    }
     const bq = f.look.quad ? 0.62 : 1; // 4本足（小さい猫）はシールドも小さく低い
     rig.bubble.position.set(x, -(y - 45 * bq), 0);
     rig.bubble.scale.setScalar((20 + 34 * (f.shieldHP / f.shMax)) * bq * Math.sqrt(f.s.shieldMul || 1));
@@ -670,13 +679,17 @@ function projMesh(p) {
     m.userData.bomb = new THREE.Mesh(SPH, new THREE.MeshStandardMaterial({ color: 0x3a3f4c, roughness: 0.6 }));
     m.userData.bomb.scale.setScalar(5); m.add(m.userData.bomb);
     m.userData.puffs = [];
-    const pm = new THREE.MeshLambertMaterial({ color: 0xaab0c4, transparent: true, opacity: 0.45, depthWrite: false });
+    // 墨（タコの上B）：黒っぽい煙で、キャラより手前に出して見えにくくする
+    const pm = p.ink ? new THREE.MeshBasicMaterial({ color: 0x1a1226, transparent: true, opacity: 0.88, depthWrite: false })
+                     : new THREE.MeshLambertMaterial({ color: 0xaab0c4, transparent: true, opacity: 0.45, depthWrite: false });
     for (let i = 0; i < 7; i++) {
       const s = new THREE.Mesh(SPH, pm); s.visible = false;
       s.userData.o = [Math.cos(i * 0.9) * 0.55, Math.sin(i * 1.7) * 0.35, Math.sin(i * 2.3) * 0.4, 0.45 + (i % 3) * 0.12];
       m.add(s); m.userData.puffs.push(s);
     }
     m.userData.pm = pm;
+  } else if (p.type === 'burst') {
+    m = new THREE.Group(); // 爆発の見た目はエフェクト（火花・煙）で出すので、ここは何も描かない
   } else {
     m = new THREE.Mesh(new THREE.ConeGeometry(14, 30, 10), new THREE.MeshStandardMaterial({ color: 0xffa03c, emissive: 0x552200 }));
   }
@@ -745,7 +758,8 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
           s.position.set(o[0] * p.r + Math.sin(p.age * 0.03 + o[1] * 9) * 4, o[1] * p.r, o[2] * p.r);
           s.scale.setScalar(p.r * o[3] * Math.min(1, 0.4 + (120 - p.life) / 15));
         }
-        m.userData.pm.opacity = 0.45 * Math.min(1, p.life / 25);
+        m.userData.pm.opacity = (p.ink ? 0.88 : 0.45) * Math.min(1, p.life / 25);
+        if (p.ink) { m.position.z += 70; m.renderOrder = 10; }
       }
     }
     else { m.position.y = 15; m.scale.y = 0.8 + Math.sin(p.age * 0.8) * 0.2; }
