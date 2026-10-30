@@ -12,6 +12,11 @@
 <link rel="manifest" href="manifest.json">
 <title>ULT</title>
 <style>
+  /* ゲーム用の文字（同じフォルダの fonts の中。ネットにつながっていなくても使える）
+     Anton：％や数字（太くて細長い）／ Dela Gothic One：タイトルや見出し（太い日本語） */
+  @font-face { font-family: "Anton"; src: url("fonts/anton.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Dela Gothic One"; src: url("fonts/dela_latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; font-display: swap; }
+  @font-face { font-family: "Dela Gothic One"; src: url("fonts/dela_jp.woff2") format("woff2"); unicode-range: U+3000-30FF, U+4E00-9FFF, U+FF00-FFEF, U+2190-21FF, U+25A0-25FF; font-display: swap; }
   :root {
     --bg: #0b1022;
     --panel: rgba(16, 22, 44, 0.94);
@@ -133,6 +138,99 @@
   #trainBar .tb { font: 700 11px -apple-system, "Hiragino Sans", sans-serif; color: #fff; background: rgba(10,16,40,0.72); border: 1px solid rgba(255,255,255,0.25);
     border-radius: 8px; padding: 6px 8px; touch-action: manipulation; white-space: nowrap; }
   @media (orientation: portrait) { #rotate { display: flex; } }
+
+  /* ===== 画面まわり（スマブラ風） ===== */
+  .btn { clip-path: polygon(7% 0, 100% 0, 93% 100%, 0 100%); border-radius: 4px; padding-left: 30px; padding-right: 30px;
+    background: linear-gradient(180deg, #2c3870 0%, #1a2350 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); transition: transform .08s, filter .15s; }
+  .btn.primary { background: linear-gradient(180deg, #ffe680 0%, #ffc61a 55%, #f2a900 100%); color: #2a1a00; text-shadow: 0 1px 0 rgba(255,255,255,0.5); }
+  .btn:active { transform: scale(0.96); filter: brightness(1.15); }
+  h1, h2, .res-name, #resultText { font-family: "Dela Gothic One", "Hiragino Sans", sans-serif; font-weight: 400; letter-spacing: 0.04em; }
+  /* タイトル */
+  #title { overflow: hidden; background: #05060f; }
+  #title .tbg { position: absolute; inset: -4%; background: url("stage/temple_far.jpg") center/cover; filter: saturate(1.2) brightness(0.55); animation: tZoom 18s ease-in-out infinite alternate; }
+  #title::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 0%, rgba(3,4,12,0.55) 55%, rgba(3,4,12,0.92) 100%); pointer-events: none; }
+  @keyframes tZoom { from { transform: scale(1); } to { transform: scale(1.08) translateX(-1.5%); } }
+  .tstrip { position: absolute; left: -10%; right: -10%; top: 78%; height: 26%; transform: translateY(-50%) rotate(-8deg); overflow: hidden;
+    background: linear-gradient(90deg, rgba(255,198,26,0.0), rgba(255,198,26,0.22), rgba(255,198,26,0.0)); border-top: 2px solid rgba(255,220,120,0.5); border-bottom: 2px solid rgba(255,220,120,0.5); z-index: 1; opacity: 0.85; }
+  .tstrip-in { display: flex; gap: 6px; height: 100%; width: max-content; animation: tSlide 40s linear infinite; }
+  .tstrip-in img { height: 100%; aspect-ratio: 0.8; object-fit: cover; object-position: center 20%; filter: grayscale(0.35) brightness(0.8) contrast(1.1);
+    clip-path: polygon(14% 0, 100% 0, 86% 100%, 0 100%); }
+  @keyframes tSlide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .tshine { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.13) 50%, transparent 60%); background-size: 250% 100%; animation: tShine 5s ease-in-out infinite; }
+  @keyframes tShine { 0% { background-position: 130% 0; } 60%, 100% { background-position: -30% 0; } }
+  .tbox { position: relative; z-index: 3; }
+  .logo { display: flex; flex-direction: column; align-items: center; margin-bottom: 14px; position: relative; animation: logoIn .7s cubic-bezier(.2,1.4,.4,1) both; }
+  .logo .l1 { font-family: "Dela Gothic One", "Arial Black", sans-serif; font-size: clamp(64px, 24vh, 128px); line-height: 0.95; letter-spacing: 0.04em; font-style: italic;
+    background: linear-gradient(180deg, #ffffff 0%, #fff3b0 38%, #ffc61a 55%, #e07a00 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    -webkit-text-stroke: 2px rgba(40,20,0,0.9); filter: drop-shadow(0 4px 0 #2a1600) drop-shadow(0 0 22px rgba(255,190,40,0.55)); transform: skewX(-8deg); }
+  .logo .l2 { font-family: "Anton", "Arial Black", sans-serif; font-size: clamp(14px, 4.6vh, 22px); letter-spacing: 0.42em; color: #fff; margin-top: 4px; padding-left: 0.42em;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(120,170,255,0.6); }
+  .logo::before { content: ""; position: absolute; inset: -18% -30%; z-index: -1; background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 70%); }
+  @keyframes logoIn { from { transform: scale(1.8); opacity: 0; filter: blur(8px); } to { transform: none; opacity: 1; filter: none; } }
+  .tstart { font-family: "Dela Gothic One", sans-serif; font-weight: 400; font-size: 20px; min-width: 230px; padding: 13px 34px; animation: tPulse 1.6s ease-in-out infinite; }
+  @keyframes tPulse { 0%, 100% { box-shadow: 0 0 0 rgba(255,198,26,0); filter: brightness(1); } 50% { filter: brightness(1.12); } }
+  .thint { position: fixed; top: calc(8px + var(--sat)); right: calc(14px + var(--sar)); color: rgba(220,228,255,0.7); font-size: 10.5px; margin: 0; text-shadow: 0 1px 4px #000; z-index: 4; }
+  /* キャラ選択 */
+  #select { background: linear-gradient(160deg, #101a44 0%, #070b1e 60%), #070b1e; }
+  #select::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+    background: repeating-linear-gradient(-60deg, rgba(255,255,255,0.03) 0 18px, rgba(255,255,255,0) 18px 36px); animation: selBg 8s linear infinite; }
+  @keyframes selBg { from { background-position: 0 0; } to { background-position: 140px 0; } }
+  #select .box { position: relative; }
+  #select h2 { font-size: 20px; color: #fff; text-shadow: 0 2px 0 #000; }
+  .lv-row span { white-space: nowrap; }
+  .seg { white-space: nowrap; padding: 7px 12px; }
+  .card { transition: transform .12s, box-shadow .2s; }
+  .card:active { transform: scale(0.95); }
+  .card.p1 { box-shadow: 0 0 0 1px var(--p1), 0 0 12px rgba(255,93,93,0.55); }
+  .card.cpu { box-shadow: 0 0 0 1px var(--cpu), 0 0 12px rgba(79,168,255,0.55); }
+  .card.p1.cpu { box-shadow: 0 0 0 1px #c9a2ff, 0 0 12px rgba(201,162,255,0.55); }
+  .card img { transition: transform .25s; }
+  .card.p1 img, .card.cpu img { transform: scale(1.06); }
+  .pick { border-radius: 4px; clip-path: polygon(4% 0, 100% 0, 96% 100%, 0 100%); padding-left: 14px; }
+  .pick span { font-family: "Dela Gothic One", sans-serif; font-weight: 400; font-size: 16px; }
+  .pick img { width: 38px; height: 38px; }
+  .pick { padding-top: 2px; padding-bottom: 2px; }
+  #select h2 { margin-bottom: 4px; font-size: 18px; }
+  #select .lv-row { margin-top: 6px; gap: 6px; font-size: 12px; }
+  #select .lv-row span[style] { margin-left: 4px !important; }
+  .stg .st { width: 60px; height: 34px; }
+  .seg { padding: 6px 9px; font-size: 12.5px; }
+  #select .btn { padding: 8px 26px; margin: 2px 6px; font-size: 16px; }
+  #select .row { margin-top: 6px !important; }
+  .cards.many .card { font-size: 11.5px; }
+  .cards.many .card img { aspect-ratio: 2 / 0.95; }
+  /* 結果 */
+  .res-win { font-family: "Anton", "Arial Black", sans-serif; font-size: 46px; letter-spacing: 0.12em; font-weight: 400; font-style: italic;
+    background: linear-gradient(180deg, #fff 0%, #ffe680 45%, #ffb000 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 3px 0 #3a2200) drop-shadow(0 0 14px rgba(255,200,60,0.6)); animation: winIn .6s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes winIn { from { transform: scale(2.2) skewX(-10deg); opacity: 0; } to { transform: skewX(-6deg); opacity: 1; } }
+  .res-face { width: 104px; height: 104px; border-radius: 10px; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%); border: none; animation: resIn .5s .1s both; }
+  .res-name { font-size: 22px; text-shadow: 0 2px 0 #000; }
+  #pause h2 { font-size: 26px; text-shadow: 0 2px 0 #000; }
+  /* VS 画面 */
+  #vs { position: fixed; inset: 0; z-index: 40; display: none; overflow: hidden; background: #05060f; }
+  #vs.show { display: block; }
+  #vs.out { animation: vsOut .4s ease-in forwards; }
+  @keyframes vsOut { to { opacity: 0; transform: scale(1.08); } }
+  .vs-half { position: absolute; top: 0; bottom: 0; width: 58%; overflow: hidden; }
+  .vs-l { left: 0; clip-path: polygon(0 0, 100% 0, 78% 100%, 0 100%); background: linear-gradient(120deg, #ff3b3b, #6a0010); animation: vsL .45s cubic-bezier(.2,1.2,.4,1) both; }
+  .vs-r { right: 0; clip-path: polygon(22% 0, 100% 0, 100% 100%, 0 100%); background: linear-gradient(240deg, #3b8cff, #001a5a); animation: vsR .45s cubic-bezier(.2,1.2,.4,1) both; }
+  @keyframes vsL { from { transform: translateX(-100%); } to { transform: none; } }
+  @keyframes vsR { from { transform: translateX(100%); } to { transform: none; } }
+  .vs-half img { position: absolute; top: 0; height: 100%; width: 72%; object-fit: cover; object-position: center 18%; mix-blend-mode: normal; filter: contrast(1.08) saturate(1.1);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 22%, #000 78%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 22%, #000 78%, transparent 100%); }
+  .vs-l img { left: 6%; animation: vsImg 1.7s ease-out both; } .vs-r img { right: 6%; animation: vsImg 1.7s ease-out both; }
+  @keyframes vsImg { from { transform: scale(1.18); } to { transform: scale(1); } }
+  .vs-name { position: absolute; bottom: calc(14px + var(--sab)); font-family: "Dela Gothic One", sans-serif; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.6); }
+  .vs-l .vs-name { left: calc(22px + var(--sal)); } .vs-r .vs-name { right: calc(22px + var(--sar)); text-align: right; }
+  .vs-name b { display: block; font-family: "Anton", sans-serif; font-weight: 400; font-size: 14px; letter-spacing: 0.2em; opacity: 0.85; }
+  .vs-name span { font-size: clamp(22px, 7vh, 36px); }
+  .vs-mark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) skewX(-8deg); font-family: "Anton", "Arial Black", sans-serif; font-size: clamp(70px, 26vh, 140px);
+    color: #fff; -webkit-text-stroke: 3px #1a1200; filter: drop-shadow(0 0 18px rgba(255,210,80,0.9)); background: linear-gradient(180deg, #fff 0%, #ffe680 50%, #ffb000 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: vsMark .5s .3s cubic-bezier(.2,1.6,.4,1) both; }
+  @keyframes vsMark { from { transform: translate(-50%, -50%) scale(3) skewX(-8deg); opacity: 0; } to { transform: translate(-50%, -50%) skewX(-8deg); opacity: 1; } }
+  .screen.show { animation: scrIn .25s ease-out; }
+  @keyframes scrIn { from { opacity: 0; } to { opacity: 1; } }
   .gp-focus { outline: 3px solid #ffd84a !important; outline-offset: 2px; box-shadow: 0 0 14px rgba(255,216,74,.8) !important; }
 </style>
 </head>
@@ -149,10 +247,13 @@
   <div id="opHint" style="display:none">画面を広く使うには：共有ボタン <b>⬆︎</b> →「ホーム画面に追加」→ ホーム画面のアイコンから開く</div>
 </div>
 <div class="screen" id="title">
-  <div class="box">
-    <h1>ULT</h1>
-    <p class="sub">仮のキャラで操作感と吹っ飛びを試す版です<br>iPhoneは横向き・低電力モードはオフで遊んでください</p>
-    <button class="btn primary" id="btnStart">はじめる</button>
+  <div class="tbg"></div>
+  <div class="tstrip"><div class="tstrip-in"><img src="face_fist.jpg" alt=""><img src="face_fox.jpg" alt=""><img src="face_bow.jpg" alt=""><img src="face_agent.jpg" alt=""><img src="face_robot.jpg" alt=""><img src="face_cat_ice.jpg" alt=""><img src="face_shield.jpg" alt=""><img src="face_skater.jpg" alt=""><img src="face_gsword.jpg" alt=""><img src="face_chain.jpg" alt=""><img src="face_aiki.jpg" alt=""><img src="face_tako.jpg" alt=""><img src="face_fist.jpg" alt=""><img src="face_fox.jpg" alt=""><img src="face_bow.jpg" alt=""><img src="face_agent.jpg" alt=""><img src="face_robot.jpg" alt=""><img src="face_cat_ice.jpg" alt=""><img src="face_shield.jpg" alt=""><img src="face_skater.jpg" alt=""><img src="face_gsword.jpg" alt=""><img src="face_chain.jpg" alt=""><img src="face_aiki.jpg" alt=""><img src="face_tako.jpg" alt=""></div></div>
+  <div class="tshine"></div>
+  <div class="box tbox" style="margin-top:-6vh">
+    <div class="logo"><span class="l1">ULT</span><span class="l2">THE ULTIMATE FIGHTERS</span></div>
+    <button class="btn primary tstart" id="btnStart">はじめる</button>
+    <p class="thint">iPhoneは横向き・低電力モードはオフで遊んでください</p>
   </div>
 </div>
 
@@ -175,6 +276,13 @@
       <button class="btn primary" id="btnFight">たたかう</button>
     </div>
   </div>
+</div>
+
+<!-- 対戦前の VS 画面 -->
+<div id="vs">
+  <div class="vs-half vs-l"><img id="vsImgL" alt=""><div class="vs-name"><b>あなた</b><span id="vsNameL"></span></div></div>
+  <div class="vs-half vs-r"><img id="vsImgR" alt=""><div class="vs-name"><b>CPU</b><span id="vsNameR"></span></div></div>
+  <div class="vs-mark">VS</div>
 </div>
 
 <!-- トレーニングの操作パネル（試合中、画面の上に出る） -->

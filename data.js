@@ -74,6 +74,7 @@ window.GAME_DATA = {
     air: 1.1,       // 空中で横に動く速さ
     fall: 0.92,     // 落ちる速さ（小さいほどふわっと長く飛ぶ。ジャンプの高さは変わらないように調整します）
     landLag: 0.75,  // 着地のスキ（0.75 = 25%短い）
+    jumpH: 0.7,     // ジャンプの高さ（地上・空中ジャンプ・小ジャンプ。0.7 = 今までの7割の高さ）
   },
 
   /* ---------- 物理・システム ---------- */
@@ -376,7 +377,7 @@ window.GAME_DATA = {
                hits: [{ f:[5,7], x:60, y:8, r:17, dmg:4.3, ang:80, bkb:40, kbg:45, react:'down' }] },
 
       dashAttack: { name: 'ダッシュA：スライディング蹴り', dur: 38,
-               poses: [[0,'crouch'],[3,'slide'],[16,'slide'],[24,'crouch'],[38,'idle']],
+               poses: [[0,'crouch'],[3,'bowSlide'],[16,'bowSlide'],[24,'crouch'],[38,'idle']],
                events: [{ f:[3,16], vx:7 }],
                hits: [{ f:[4,14], x:36, y:12, r:20, dmg:5.8, ang:75, bkb:65, kbg:155 }] },
 
@@ -418,10 +419,10 @@ window.GAME_DATA = {
     /* ---------- メカ（ロボ）：重くて大きい。一発一発が重い ---------- */
     mech: {
       jab:   { name: '弱1：ジャブ', dur: 18, iasa: 15, next: { key:'jab2', f:[4,14] },
-               poses: [[0,'jabReady'],[3,'punch'],[7,'punch'],[18,'idle']],
+               poses: [[0,'jabReady'],[3,'roJab'],[7,'roJab'],[18,'idle']],
                hits: [{ f:[3,4], x:48, y:76, r:20, dmg:1.8, ang:20, fkb:32, react:'light' }] },
       jab2:  { name: '弱2：ストレート', dur: 20, iasa: 17, next: { key:'jab3', f:[4,16] },
-               poses: [[0,'punch'],[3,'punch2'],[8,'punch2'],[20,'idle']],
+               poses: [[0,'roJab'],[3,'roStraight'],[8,'roStraight'],[20,'idle']],
                hits: [{ f:[3,4], x:50, y:74, r:20, dmg:1.8, ang:20, fkb:34, react:'light' }] },
       jab3:  { name: '弱3：ブーストアッパー', dur: 34, iasa: 30,
                poses: [[0,'uppercutWind'],[6,'uppercut'],[14,'uppercut'],[34,'idle']],
@@ -438,7 +439,7 @@ window.GAME_DATA = {
                hits: [{ f:[6,8], x:50, y:12, r:20, dmg:5.8, ang:80, bkb:60, kbg:26 }] },
 
       dashAttack: { name: 'ダッシュA：ブーストショルダー', dur: 44,
-               poses: [[0,'dashStart'],[4,'tackle'],[18,'tackle'],[44,'idle']],
+               poses: [[0,'dashStart'],[4,'roBoost'],[18,'roBoost'],[44,'idle']],
                events: [{ f:[2,16], vx:8 }],
                hits: [{ f:[5,15], x:34, y:64, r:31, dmg:8.6, ang:45, bkb:60, kbg:108 }] },
 
@@ -542,7 +543,7 @@ window.GAME_DATA = {
     /* ---------- 大剣（大剣使い）：遅いけど重い一振り。リーチが長い ---------- */
     gsword: {
       jab:   { name: '弱1：柄打ち', dur: 20, iasa: 16, next: { key:'jab2', f:[5,15] },
-               poses: [[0,'jabReady'],[3,'punch'],[8,'punch'],[20,'idle']],
+               poses: [[0,'jabReady'],[3,'gsPommel'],[8,'gsPommel'],[20,'idle']],
                hits: [{ f:[3,4], x:40, y:68, r:16, dmg:2.2, ang:25, fkb:30, react:'light' }] },
       jab2:  { name: '弱2：大剣なぎ払い', dur: 32, iasa: 27,
                poses: [[0,'swingWind'],[6,'swingFwd',{tw:0.8}],[12,'swingFwd'],[32,'idle']],
@@ -559,7 +560,7 @@ window.GAME_DATA = {
                poses: [[0,'swingLowWind'],[7,'swingLow'],[14,'swingLow'],[30,'crouch']],
                hits: [{ f:[7,9], x:80, y:12, r:20, dmg:6.5, ang:78, bkb:56, kbg:34 }] },
       dashAttack: { name: 'ダッシュA：突進斬り', dur: 44,
-               poses: [[0,'swingWind'],[8,'swingFwd',{tw:1}],[18,'swingFwd'],[44,'idle']],
+               poses: [[0,'swingWind'],[8,'gsDashThrust',{tw:1}],[18,'gsDashThrust'],[44,'idle']],
                events: [{ f:[0,12], vx:7 }],
                hits: [{ f:[8,13], x:60, y:52, r:28, dmg:10.1, ang:40, bkb:55, kbg:108 }] },
       fsmash:{ name: '横スマ：兜割り（振り下ろし）', dur: 70, charge: { f:14, max:60, mul:1.4 },
@@ -597,13 +598,13 @@ window.GAME_DATA = {
     /* ---------- 盾と片手剣（盾使い）：盾で守って、剣と盾で反撃 ---------- */
     shield: {
       jab:   { name: '弱1：盾押し', dur: 16, iasa: 13, next: { key:'jab2', f:[3,13] },
-               poses: [[0,'guardWind'],[2,'bash'],[7,'bash'],[16,'idle']],
+               poses: [[0,'guardWind'],[2,'shPush'],[7,'shPush'],[16,'idle']],
                hits: [{ f:[2,3], x:36, y:60, r:18, dmg:1.6, ang:20, fkb:30, react:'light' }] },
       jab2:  { name: '弱2：剣突き', dur: 17, iasa: 14, next: { key:'jab3', f:[3,14] },
                poses: [[0,'spearWind'],[3,'spearThrust'],[8,'spearThrust'],[17,'idle']],
                hits: [{ f:[3,4], x:60, y:62, r:15, dmg:1.6, ang:25, fkb:30, react:'light' }] },
       jab3:  { name: '弱3：シールドバッシュ', dur: 26, iasa: 20,
-               poses: [[0,'guardWind'],[5,'bash'],[12,'bash'],[26,'idle']],
+               poses: [[0,'guardWind'],[5,'shBash'],[12,'shBash'],[26,'idle']],
                events: [{ f:[4,8], vx:3 }],
                hits: [{ f:[5,7], x:42, y:60, r:22, dmg:3.6, ang:45, bkb:50, kbg:38 }] },
       utilt: { name: '上強：盾突き上げ', dur: 28, iasa: 24,
@@ -618,11 +619,11 @@ window.GAME_DATA = {
                poses: [[0,'crouch'],[5,'guardLow'],[11,'guardLow'],[22,'crouch']],
                hits: [{ f:[5,7], x:66, y:12, r:16, dmg:5, ang:76, bkb:52, kbg:36 }] },
       dashAttack: { name: 'ダッシュA：シールドチャージ', dur: 40,
-               poses: [[0,'guardWind'],[4,'bash'],[16,'bash'],[40,'idle']],
+               poses: [[0,'shThrowWind'],[4,'shCharge'],[16,'shCharge'],[40,'idle']],
                events: [{ f:[0,14], vx:8 }],
                hits: [{ f:[4,14], x:38, y:56, r:28, dmg:7.9, ang:40, bkb:60, kbg:96 }] },
       fsmash:{ name: '横スマ：重盾撃（じゅうじゅんげき）', dur: 56, charge: { f:12, max:60, mul:1.4 },
-               poses: [[0,'guardWind'],[12,'guardWind'],[16,'bash'],[26,'bash'],[56,'idle']],
+               poses: [[0,'shThrowWind'],[12,'shThrowWind'],[16,'shBash'],[26,'shBash'],[56,'idle']],
                events: [{ f:[14,17], vx:6 }],
                hits: [{ f:[16,18], x:48, y:60, r:28, dmg:15.8, ang:40, bkb:42, kbg:110 }] },
       usmash:{ name: '上スマ：天突き', dur: 52, charge: { f:10, max:60, mul:1.4 },
@@ -653,13 +654,13 @@ window.GAME_DATA = {
     /* ---------- ローラーブレード（スケーター）：足技。風をまとって速い ---------- */
     skate: {
       jab:   { name: '弱1：ジャブ', dur: 14, iasa: 11, next: { key:'jab2', f:[3,11] },
-               poses: [[0,'jabReady'],[2,'punch'],[6,'punch'],[14,'idle']],
+               poses: [[0,'jabReady'],[2,'skJab'],[6,'skJab'],[14,'idle']],
                hits: [{ f:[2,3], x:38, y:70, r:14, dmg:1.4, ang:20, fkb:28, react:'light' }] },
       jab2:  { name: '弱2：ローキック', dur: 15, iasa: 12, next: { key:'jab3', f:[3,12] },
-               poses: [[0,'kickWind'],[3,'kick'],[7,'kick'],[15,'idle']],
+               poses: [[0,'skWheelWind'],[3,'skLowKick'],[7,'skLowKick'],[15,'idle']],
                hits: [{ f:[3,4], x:46, y:44, r:16, dmg:1.4, ang:25, fkb:30, react:'light' }] },
       jab3:  { name: '弱3：スピンキック', dur: 24, iasa: 16,
-               poses: [[0,'kickWind',{yw:0}],[4,'roundKick',{yw:0}],[10,'roundKick',{yw:360}],[24,'idle',{yw:360}]],
+               poses: [[0,'kickWind',{yw:0}],[4,'skHeel',{yw:0}],[10,'skHeel',{yw:360}],[24,'idle',{yw:360}]],
                hits: [{ f:[5,7], x:48, y:60, r:20, dmg:3, ang:50, bkb:48, kbg:24 }] },
       utilt: { name: '上強：振り上げキック', dur: 22, iasa: 18,
                poses: [[0,'skWheelWind'],[4,'skUpKick'],[11,'skUpKick'],[22,'idle']],
@@ -704,13 +705,13 @@ window.GAME_DATA = {
     },
     /* ---------- 鎖鎌（鎖鎌使い）：近くは鎌（刀と同じ速さ）。鎖が伸びる技（wire）は先端にも当たりがある ---------- */
     chain: {
-      jab: {name:'弱1：柄打ち', dur:16, iasa:13, next:{key:'jab2', f:[3, 13]}, poses:[[0, 'kReady'], [2, 'kSlash'], [6, 'kSlash'], [12, 'kReady'], [16, 'idle']], hits:[{f:[2, 3], x:56, y:62, r:16, dmg:1.2, ang:20, fkb:28, react:'light'}]},
-      jab2: {name:'弱2：鎌斬り', dur:17, iasa:14, next:{key:'jab3', f:[3, 14]}, poses:[[0, 'kSlash'], [3, 'kRise', {tw:-0.4}], [7, 'kRise'], [17, 'kReady']], hits:[{f:[3, 4], x:42, y:86, r:18, dmg:1.2, ang:30, fkb:30, react:'light'}]},
-      jab3: {name:'弱3：分銅打ち', dur:20, iasa:14, poses:[[0, 'kThrustWind'], [5, 'kThrust'], [12, 'kThrust'], [20, 'idle']], events:[{f:[4, 8], vx:3}], hits:[{f:[5, 7], x:62, y:58, r:17, dmg:3, ang:55, bkb:46, kbg:22}, {f:[5, 7], x:92, y:58, r:14, dmg:3, ang:55, bkb:46, kbg:22}], wire:[4, 12]},
+      jab: {name:'弱1：柄打ち', dur:16, iasa:13, next:{key:'jab2', f:[3, 13]}, poses:[[0, 'kReady'], [2, 'chPommel'], [6, 'chPommel'], [12, 'kReady'], [16, 'idle']], hits:[{f:[2, 3], x:56, y:62, r:16, dmg:1.2, ang:20, fkb:28, react:'light'}]},
+      jab2: {name:'弱2：鎌斬り', dur:17, iasa:14, next:{key:'jab3', f:[3, 14]}, poses:[[0, 'chPommel'], [3, 'chSickle', {tw:-0.4}], [7, 'chSickle'], [17, 'kReady']], hits:[{f:[3, 4], x:42, y:86, r:18, dmg:1.2, ang:30, fkb:30, react:'light'}]},
+      jab3: {name:'弱3：分銅打ち', dur:20, iasa:14, poses:[[0, 'chWhirl'], [5, 'chToss'], [12, 'chToss'], [20, 'idle']], events:[{f:[4, 8], vx:3}], hits:[{f:[5, 7], x:62, y:58, r:17, dmg:3, ang:55, bkb:46, kbg:22}, {f:[5, 7], x:92, y:58, r:14, dmg:3, ang:55, bkb:46, kbg:22}], wire:[4, 12]},
       utilt: {name:'上強：鎌の振り上げ', dur:26, iasa:22, poses:[[0, 'chUtWind'], [4, 'chUtArc'], [9, 'chUtBack'], [26, 'idle']], hits:[{f:[4, 6], x:30, y:94, r:20, dmg:2.9, ang:100, fkb:42, react:'light'}, {f:[7, 10], x:0, y:112, r:24, dmg:5, ang:88, bkb:40, kbg:202}]},
       ftilt: {name:'横強：分銅突き（先が強い）', dur:28, iasa:24, poses:[[0, 'chWhirl'], [6, 'chToss'], [13, 'chToss'], [28, 'idle']], hits:[{f:[6, 8], x:64, y:64, r:15, dmg:6.5, ang:38, bkb:32, kbg:161}, {f:[6, 8], x:42, y:62, r:14, dmg:5, ang:40, bkb:30, kbg:143}, {f:[6, 8], x:110, y:64, r:14, dmg:7.2, ang:38, bkb:32, kbg:161}], wire:[5, 14]},
       dtilt: {name:'下強：這い鎖（浮かせ）', dur:22, iasa:12, poses:[[0, 'crouch'], [5, 'chCrawl'], [12, 'chCrawl'], [22, 'crouch']], hits:[{f:[5, 7], x:58, y:10, r:17, dmg:4.3, ang:82, bkb:55, kbg:28}, {f:[5, 7], x:96, y:10, r:14, dmg:4.3, ang:82, bkb:55, kbg:28}], wire:[4, 12]},
-      dashAttack: {name:'ダッシュA：すべり鎌（浮かせ・コンボ始動）', dur:30, iasa:24, poses:[[0, 'kLowWind'], [3, 'kSlashLow', {tw:1}], [12, 'kSlashLow'], [30, 'kReady']], events:[{f:[0, 10], vx:8}], hits:[{f:[3, 10], x:40, y:40, r:30, dmg:6.9, ang:78, bkb:62, kbg:40}]},
+      dashAttack: {name:'ダッシュA：すべり鎌（浮かせ・コンボ始動）', dur:30, iasa:24, poses:[[0, 'crouch'], [3, 'chSlideKama', {tw:1}], [12, 'chSlideKama'], [30, 'kReady']], events:[{f:[0, 10], vx:8}], hits:[{f:[3, 10], x:40, y:40, r:30, dmg:6.9, ang:78, bkb:62, kbg:40}]},
       fsmash: {name:'横スマ：鎖鎌投げ（先端が強い）', dur:58, charge:{f:10, max:60, mul:1.4}, poses:[[0, 'chHurlWind'], [10, 'chHurlWind'], [14, 'chHurl'], [26, 'chHurl'], [58, 'kReady']], events:[{f:[12, 15], vx:7}], hits:[{f:[14, 15], x:76, y:50, r:13, dmg:14.4, ang:38, bkb:44, kbg:118}, {f:[14, 15], x:50, y:48, r:17, dmg:10.8, ang:40, bkb:38, kbg:101}, {f:[14, 15], x:136, y:50, r:14, dmg:15.8, ang:38, bkb:44, kbg:110}], wire:[12, 26]},
       usmash: {name:'上スマ：鎌の斬り上げ', dur:54, charge:{f:8, max:60, mul:1.4}, poses:[[0, 'chUpWind'], [8, 'chUpWind'], [12, 'chUpReap'], [22, 'chUpReap'], [54, 'idle']], hits:[{f:[12, 14], x:32, y:96, r:22, dmg:9.8, ang:88, bkb:42, kbg:146}, {f:[15, 19], x:0, y:116, r:26, dmg:10.4, ang:90, bkb:42, kbg:149}]},
       dsmash: {name:'下スマ：両払い鎖', dur:54, charge:{f:8, max:60, mul:1.4}, poses:[[0, 'kLowWind'], [8, 'kLowWind'], [11, 'chLowF'], [14, 'chLowF'], [16, 'chLowB'], [22, 'chLowB'], [54, 'idle']], hits:[{f:[11, 13], x:58, y:10, r:18, dmg:9.4, ang:30, bkb:38, kbg:115}, {f:[16, 18], x:-58, y:10, r:18, dmg:10.1, ang:150, bkb:38, kbg:117}]},
@@ -818,7 +819,7 @@ window.GAME_DATA = {
       id: 'fist', no: 1, name: '拳闘士', range: '近距離', type: 'パワー', weapon: 'unarmed',
       portrait: 'face_fist.jpg', // キャラ選択の絵
       model: 'wrestler.glb', // 3Dモデル（Higgsfieldで作成）
-      stats: { weight: 125, walk: 2.8, run: 4.639, air: 2.969, airAccel: 0.32, jump: 13.8, djump: 12.8,
+      stats: { weight: 125, walk: 2.8, run: 4.639, air: 2.969, airAccel: 0.32, jump: 14.08, djump: 12.8,
                gravity: 0.66, fall: 11.2, airJumps: 2, hitScaleY: 1.15, moveKb: { ftilt: 0.85 }, grab: { f: 5, reach: 70, dur: 30 }, landMul: 0.9, runUp: 6, turn: 6, armorMoves: ['dashAttack', 'usmash', 'dsmash', 'ftilt'], dmgMul: 1.1, kbMul: 1.05, speed: 0.92, reachMul: 1.4, endlagMul: 1.15, // 壊しキャラ：技のあとのスキが大きい
                moveSpeed: { nair: 1.1, fair: 1.1, bair: 1.1, uair: 1.1, dair: 1.1 }, recoveryMul: 0.795 },
       look: { dj:'heavy', jumpCol:'#ffd9a0', scale: 1.15, hurtScale: 1.38, thick: 9.5, head: 11.5, gaze: { pitch: 10 } }, // gaze：目線のクセ（pitch：あごを上げる角度、tilt：首のかしげ）
@@ -1098,7 +1099,7 @@ window.GAME_DATA = {
       throws: {
         fthrow: { name: '前投げ：前蹴り', dur: 28, release: 11, poses: [[0,'hold'],[6,'kickWind'],[11,'kick'],[28,'idle']],
                   held: [[0,36,0,0],[11,48,10,0]], hit: { dmg:5.8, ang:40, bkb:55, kbg:122 } },
-        bthrow: { name: '後ろ投げ：巴投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'throwUp'],[14,'throwDown'],[34,'idle']],
+        bthrow: { name: '後ろ投げ：巴投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'agTomoe'],[14,'agTomoe'],[34,'idle']],
                   events: [{ f:0, turn:true }],
                   held: [[0,-36,0,0],[7,-5,70,-90],[14,40,10,-180]], hit: { dmg:7.2, ang:40, bkb:60, kbg:120 } },
         uthrow: { name: '上投げ：打ち上げて撃つ', dur: 40, release: 10, poses: [[0,'hold'],[10,'throwUp'],[15,'gunAim',{fa1:150,ba1:140}],[19,'gunFire',{fa1:160,ba1:150}],[40,'idle']],
@@ -1185,17 +1186,17 @@ window.GAME_DATA = {
       portrait: 'face_robot.jpg',
       model: 'robot.glb', // 3Dモデル（Higgsfieldで作成）
       // hitstunMul：のけぞる時間の倍率（1.18 = 18%長い → 連続技を入れられやすい）
-      stats: { weight: 132, walk: 2.6, run: 4.828, air: 2.878, airAccel: 0.28, jump: 11.7, djump: 10.8,
+      stats: { weight: 132, walk: 2.6, run: 4.828, air: 2.878, airAccel: 0.28, jump: 14.29, djump: 10.8,
                gravity: 0.67, fall: 11.4, airJumps: 2, moveKb: { ftilt: 0.85 }, grab: { f: 8, reach: 80, dur: 36 }, landMul: 1.05, runUp: 9, turn: 10, dmgMul: 1.0, kbMul: 1.04, speed: 0.92, hitstunMul: 1.25, endlagMul: 1.15, quickMul: 1.316, reachMul: 0.9, recoveryMul: 1.209, projRange: 0.55 },
       look: { dj:'jet', jumpCol:'#8fe6ff', thick: 10.5, head: 12, scale: 1.24, hurtScale: 1.4, gaze: { pitch: 2 } }, // scale：見た目の大きさ / hurtScale：くらう範囲（キャラの「大きさ」の数値）
       jetFuel: 85, jetRegen: 1.2, // ジェットの燃料（飛べるコマ数）と、地面にいるときの回復の速さ
       cpu: { kind: 'breaker', nt: 6, style: 'mid', range: 80 },
       specials: {
         /* --- 地上 --- */
-        n:    { name: 'NB：チャージビーム（ためるほど太く強い）', dur: 40,
-                holdShot: { f:8, max:90, over:40, min:{ dmg:4.3, speed:0, bkb:30, kbg:34 }, max2:{ dmg:17.3, speed:0, bkb:45, kbg:68 } },
+        n:    { name: 'NB：ビーム球（B でためはじめ、もう一度 B で発射。シールドでためを残しておける）', dur: 40,
+                holdShot: { f:8, max:90, over:40, toggle:true, min:{ dmg:4.3, speed:9, bkb:30, kbg:34 }, max2:{ dmg:17.3, speed:7.5, bkb:45, kbg:68 } },
                 poses: [[0,'beamCharge'],[8,'beamCharge'],[11,'beamFire'],[26,'beamFire'],[40,'idle']],
-                events: [{ f:11, proj:'beam', shot:true, ang:0, x:62, y:84 }] },
+                events: [{ f:11, proj:'orb', shot:true, ang:0, x:62, y:84 }] },
         side: { name: '横B：ブーストタックル（出だしだけアーマー）', dur: 58, armor: [6, 10],
                 poses: [[0,'dashStart'],[6,'tackle'],[20,'tackle'],[30,'crouch'],[58,'idle']],
                 events: [{ f:[7,19], vx:9.5 }, { f:7, blast:{ x:-30, y:80, col:'#8fe6ff' } }],
@@ -1209,10 +1210,10 @@ window.GAME_DATA = {
                 hits: [{ f:[20,22], x:40, y:12, r:30, dmg:8.6, ang:80, bkb:55, kbg:60 },
                        { f:[20,22], x:-40, y:12, r:30, dmg:8.6, ang:100, bkb:55, kbg:60 }] },
         /* --- 空中 --- */
-        airN: { name: '空中NB：チャージビーム', dur: 40, landLag: 12, gravityMul: 0.2,
-                holdShot: { f:8, max:70, over:30, min:{ dmg:4.3, speed:0, bkb:30, kbg:41 }, max2:{ dmg:14.4, speed:0, bkb:42, kbg:76 } },
+        airN: { name: '空中NB：ビーム球', dur: 40, landLag: 12, gravityMul: 0.2,
+                holdShot: { f:8, max:70, over:30, toggle:true, min:{ dmg:4.3, speed:9, bkb:30, kbg:41 }, max2:{ dmg:14.4, speed:7.5, bkb:42, kbg:76 } },
                 poses: [[0,'beamCharge'],[8,'beamCharge'],[11,'beamFire'],[26,'beamFire'],[40,'fall']],
-                events: [{ f:11, proj:'beam', shot:true, ang:0, x:62, y:84 }] },
+                events: [{ f:11, proj:'orb', shot:true, ang:0, x:62, y:84 }] },
         airF: { name: '空中前B：ブーストナックル', dur: 44, landLag: 16, oncePerAir: true, gravityMul: 0.2,
                 poses: [[0,'rocketWind'],[8,'rocketPunch'],[22,'rocketPunch'],[44,'fall']],
                 events: [{ f:0, vy:1.5 }, { f:[7,16], vx:9, vy:-1 }, { f:7, blast:{ x:-30, y:80, col:'#8fe6ff' } }],
@@ -1233,6 +1234,8 @@ window.GAME_DATA = {
       },
       projectiles: {
         // ビーム：minLen〜maxLen = ためなし〜最大ための長さ / r〜r2 = 太さ / life = 出ている時間
+        // ビーム球：ためなし r 〜 最大ため r2 の大きさ。まっすぐ飛ぶ
+        orb:   { type:'orb', life:70, r:8, r2:22, dmg:4.3, ang:35, bkb:30, kbg:40, elem:'beam' },
         beam:  { type:'beam', life:14, minLen:170, maxLen:560, r:7, r2:18, dmg:4.3, ang:35, bkb:30, kbg:40 },
         shock: { type:'shock', speed:7, life:30, r:18, dmg:6.5, ang:70, bkb:42, kbg:60 },
       },
@@ -1309,7 +1312,7 @@ window.GAME_DATA = {
       /* ===== 炎の姿（下Bで入れかわる）：パワー重視。バンダナと目の傷 ===== */
       form2: {
         name: 'ネコ（炎）', portrait: 'face_cat_fire.jpg', model: 'cat_fire.glb',
-        stats: { weight: 84, walk: 3.0, run: 6.326, air: 3.674, airAccel: 0.38, jump: 13.2, djump: 12.5,
+        stats: { weight: 84, walk: 3.0, run: 6.326, air: 3.674, airAccel: 0.38, jump: 14.1, djump: 12.5,
                  gravity: 0.66, fall: 11.2, airJumps: 2, hitScaleY: 0.85, grab: { f: 6, reach: 56, dur: 28 }, landMul: 1.15, runUp: 7, turn: 7, dmgMul: 1.15, kbMul: 0.93, speed: 0.96, shieldMul: 1.2, quickMul: 0.829, recoveryMul: 1.218 },
         // 炎の姿で入れかわる通常技（強い技だけ）
         moves: {
@@ -1444,7 +1447,7 @@ window.GAME_DATA = {
                 poses: [[0,'guardWind'],[5,'guard'],[7,'guard'],[34,'fall']] },
       },
       throws: {
-        fthrow: { name: '前投げ：盾で突き飛ばす', dur: 30, release: 12, poses: [[0,'hold'],[6,'guardWind'],[12,'bash'],[30,'idle']],
+        fthrow: { name: '前投げ：盾で突き飛ばす', dur: 30, release: 12, poses: [[0,'hold'],[6,'shThrowWind'],[12,'shBash'],[30,'idle']],
                   held: [[0,32,0,0],[12,44,8,0]], hit: { dmg:6.5, ang:40, bkb:60, kbg:118 } },
         bthrow: { name: '後ろ投げ：背負い投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'throwUp'],[14,'throwDown'],[34,'idle']],
                   events: [{ f:0, turn:true }],
@@ -1516,11 +1519,11 @@ window.GAME_DATA = {
                 hits: [{ f:[6,36], x:0, y:-4, r:22, dmg:7.2, ang:280, bkb:34, kbg:70 }] },
       },
       throws: {
-        fthrow: { name: '前投げ：蹴り飛ばし', dur: 28, release: 11, poses: [[0,'hold'],[6,'kickWind'],[11,'kick'],[28,'idle']],
+        fthrow: { name: '前投げ：蹴り飛ばし', dur: 28, release: 11, poses: [[0,'hold'],[6,'skWheelWind'],[11,'skWheel'],[28,'idle']],
                   held: [[0,32,0,0],[11,44,10,0]], hit: { dmg:5.8, ang:40, bkb:55, kbg:120 } },
         bthrow: { name: '後ろ投げ：スピンスロー', dur: 34, release: 14, poses: [[0,'hold',{yw:0}],[7,'hold',{yw:180}],[14,'throwFwd',{yw:360}],[34,'idle',{yw:360}]],
                   held: [[0,32,0,0],[7,-20,20,0],[14,-40,12,0]], hit: { dmg:7.2, ang:42, bkb:60, kbg:122 } },
-        uthrow: { name: '上投げ：風で打ち上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'kickWind'],[12,'upKick'],[32,'idle']],
+        uthrow: { name: '上投げ：風で打ち上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'skWheelWind'],[12,'skUpKick'],[32,'idle']],
                   held: [[0,32,0,0],[12,6,80,0]], hit: { dmg:5, ang:90, bkb:66, kbg:84 } },
         dthrow: { name: '下投げ：ウィールで踏みつけ', dur: 22, release: 13, poses: [[0,'hold'],[7,'stompWind'],[13,'stompDown'],[32,'idle']],
                   held: [[0,32,0,0],[13,30,-2,0]], hit: { dmg:4.3, ang:78, bkb:58, kbg:26 } },
@@ -1591,7 +1594,7 @@ window.GAME_DATA = {
                 hits: [{ f:[8,42], x:6, y:-8, r:24, dmg:9.4, ang:280, bkb:35, kbg:72 }] },
       },
       throws: {
-        fthrow: { name: '前投げ：柄で殴り飛ばす', dur: 30, release: 12, poses: [[0,'hold'],[6,'punchWind'],[12,'punch'],[30,'idle']],
+        fthrow: { name: '前投げ：柄で殴り飛ばす', dur: 30, release: 12, poses: [[0,'hold'],[6,'gsGroundWind'],[12,'gsPommel'],[30,'idle']],
                   held: [[0,32,0,0],[12,44,10,0]], hit: { dmg:7.2, ang:40, bkb:60, kbg:118 } },
         bthrow: { name: '後ろ投げ：背負い投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'throwUp'],[14,'throwDown'],[34,'idle']],
                   events: [{ f:0, turn:true }],
@@ -1699,13 +1702,13 @@ window.GAME_DATA = {
                 hits: [{ f:[7,12], x:40, y:55, r:22, grab:true }, { f:[7,12], x:90, y:55, r:22, grab:true }, { f:[7,12], x:135, y:55, r:20, grab:true }] },
       },
       throws: {
-        fthrow: { name: '前投げ：鎖で巻いて投げる', dur: 30, release: 12, poses: [[0,'hold'],[6,'kSlashWind'],[12,'kSlash'],[30,'idle']],
+        fthrow: { name: '前投げ：鎖で巻いて投げる', dur: 30, release: 12, poses: [[0,'hold'],[6,'chWhirl'],[12,'chToss'],[30,'idle']],
                   held: [[0,32,0,0],[12,46,10,0]], hit: { dmg:5.8, ang:40, bkb:55, kbg:120 } },
         bthrow: { name: '後ろ投げ：鎖でふり回す', dur: 36, release: 15, poses: [[0,'hold',{yw:0}],[8,'hold',{yw:180}],[15,'throwFwd',{yw:360}],[36,'idle',{yw:360}]],
                   held: [[0,32,0,0],[8,-30,20,0],[15,-50,12,0]], hit: { dmg:7.9, ang:42, bkb:60, kbg:122 } },
-        uthrow: { name: '上投げ：鎌で斬り上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'kUpWind'],[12,'kUpArc'],[32,'idle']],
+        uthrow: { name: '上投げ：鎌で斬り上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'chUtWind'],[12,'chUtArc'],[32,'idle']],
                   held: [[0,32,0,0],[12,6,80,0]], hit: { dmg:5, ang:90, bkb:66, kbg:84 } },
-        dthrow: { name: '下投げ：たたきつけ（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'kSlashWind'],[14,'kDownThrust'],[22,'idle']],
+        dthrow: { name: '下投げ：たたきつけ（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'chUtArc'],[14,'throwDown'],[22,'idle']],
                   held: [[0,32,0,0],[14,30,-2,0]], hit: { dmg:4.3, ang:78, bkb:60, kbg:24 } },
       },
       projectiles: {},
@@ -1774,9 +1777,9 @@ window.GAME_DATA = {
         bthrow: { name: '後ろ投げ：呼吸投げ', dur: 36, release: 16, poses: [[0,'hold',{yw:0}],[8,'hold',{yw:180}],[16,'throwFwd',{yw:180}],[36,'idle',{yw:180}]],
                   events: [{ f:16, turn:true }],
                   held: [[0,32,0,0],[8,-10,30,0],[16,-46,8,0]], hit: { dmg:8.6, ang:40, bkb:60, kbg:142 } },
-        uthrow: { name: '上投げ：天地投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'crouch'],[14,'uppercut'],[34,'idle']],
+        uthrow: { name: '上投げ：天地投げ', dur: 34, release: 14, poses: [[0,'hold'],[7,'akTenWind'],[14,'akTenchi'],[34,'idle']],
                   held: [[0,32,0,0],[14,6,90,0]], hit: { dmg:7.2, ang:90, bkb:62, kbg:128 } },
-        dthrow: { name: '下投げ：小手返し（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'throwUp'],[14,'throwDown'],[22,'idle']],
+        dthrow: { name: '下投げ：小手返し（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'akKote'],[14,'throwDown'],[22,'idle']],
                   held: [[0,32,0,0],[7,20,40,-90],[14,30,-2,-180]], hit: { dmg:5, ang:78, bkb:60, kbg:24 } },
       },
       projectiles: {
@@ -1816,13 +1819,13 @@ window.GAME_DATA = {
         airD: {name:'空中下B：空中泡のバリア', dur:38, landLag:10, gravityMul:0.3, reflect:{f:[3, 22], x:0, y:50, r:62, mul:1.1}, poses:[[0, 'tuck'], [3, 'nairSpread'], [22, 'nairSpread'], [38, 'fall']]},
       },
       throws: {
-        fthrow: { name: '前投げ：触手でポイ', dur: 30, release: 12, poses: [[0,'hold'],[6,'swingWind'],[12,'swingFwd'],[30,'idle']],
+        fthrow: { name: '前投げ：触手でポイ', dur: 30, release: 12, poses: [[0,'hold'],[6,'takoLashW'],[12,'takoLash'],[30,'idle']],
                   held: [[0,32,0,0],[12,46,10,0]], hit: { dmg:5, ang:40, bkb:55, kbg:118 } },
         bthrow: { name: '後ろ投げ：くるくる投げ', dur: 36, release: 15, poses: [[0,'hold',{yw:0}],[8,'hold',{yw:180}],[15,'throwFwd',{yw:360}],[36,'idle',{yw:360}]],
                   held: [[0,32,0,0],[8,-30,20,0],[15,-50,12,0]], hit: { dmg:6.5, ang:42, bkb:58, kbg:120 } },
-        uthrow: { name: '上投げ：泡で打ち上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'crouch'],[12,'uppercut'],[32,'idle']],
+        uthrow: { name: '上投げ：泡で打ち上げ', dur: 32, release: 12, poses: [[0,'hold'],[6,'crouch'],[12,'takoSpout'],[32,'idle']],
                   held: [[0,32,0,0],[12,6,80,0]], hit: { dmg:5, ang:90, bkb:66, kbg:84 } },
-        dthrow: { name: '下投げ：触手でぺしゃんこ（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'swingWind'],[14,'swingDown'],[22,'idle']],
+        dthrow: { name: '下投げ：触手でぺしゃんこ（バウンド）', dur: 22, release: 14, poses: [[0,'hold'],[7,'takoLashW'],[14,'swingDown'],[22,'idle']],
                   held: [[0,32,0,0],[14,30,-2,0]], hit: { dmg:4.3, ang:78, bkb:58, kbg:24 } },
       },
       projectiles: {

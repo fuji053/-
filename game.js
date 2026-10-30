@@ -464,6 +464,24 @@ const POSES = {
   skCrescent:   P(-15, -40, 30, 120, 30, 150, 0, -10, -30, 0, 0.5),     // スケーター：足を高く回して風の刃を出す
   shThrowWind:  P(-5, 40, 90, 120, 120, 30, -35, -25, -10, 0, 0.6),     // 盾：盾を胸の前に引きよせる
   shThrow:      P(18, 30, 80, 95, 0, 45, -50, -35, -5, 0, -0.5),        // 盾：盾を前へ投げる
+  // ===== 弱・ダッシュ攻撃・投げ（キャラごと） =====
+  chPommel:     P(15, 70, 40, 20, 90, 40, -45, -30, -8, 0, 0.6),        // 鎖鎌：柄で短く打つ
+  chSickle:     P(20, 110, 60, -20, 70, 45, -50, -35, -5, 0, 0.8),      // 鎖鎌：鎌を引っかけるように斬る
+  chSlideKama:  Object.assign(P(-45, 120, 10, 160, 20, 85, 0, 60, -40), { pa: 1 }),  // 鎖鎌：すべりながら鎌を前へ
+  roJab:        P(18, 88, 10, 30, 110, 62, -60, -45, -10, 0, 0.8),      // ロボ：腰を落として重いジャブ
+  roStraight:   P(28, 20, 110, 92, 5, 62, -60, -45, -5, 0, -0.9),       // ロボ：もう片方の腕でストレート
+  roBoost:      P(40, -60, 20, -70, 20, 45, -60, -40, -20, 0, 0.6),     // ロボ：両腕を後ろへ、背中から噴射して突っこむ
+  skJab:        P(5, 100, 30, 40, 100, 50, -20, -25, -30, 0, 0.6),      // スケーター：すべりながら軽く打つ
+  skLowKick:    P(-5, 50, 80, -30, 60, 60, 0, -15, -25, 0, 0.3),        // スケーター：低い前蹴り
+  skHeel:       P(10, 120, 40, -60, 40, 95, -10, -15, -20, 0, -0.3),    // スケーター：回りながらかかとで蹴る
+  gsPommel:     P(15, 70, 10, 65, 10, 50, -55, -35, -5, 0, 0.3),        // 大剣：柄で突く
+  gsDashThrust: P(30, 60, 0, 55, 0, 70, -80, -40, -10, 0, 0),           // 大剣：走りながら剣をまっすぐ突き出す
+  shPush:       P(12, 30, 90, 70, 60, 40, -45, -30, -8, 0, -0.4),       // 盾：盾で軽く押す
+  shBash:       P(25, -20, 60, 92, 0, 55, -50, -40, 0, 0, -0.6),        // 盾：盾を前へ突き出す
+  shCharge:     P(32, -30, 60, 85, 30, 60, -80, -40, -20, 0, -0.5),     // 盾：盾を前にかまえて突進
+  bowSlide:     Object.assign(P(-60, 150, 20, 220, 10, 85, 0, 60, -40), { pa: 1 }),  // 弓：弓を頭の上に持ってスライディング
+  agTomoe:      Object.assign(P(-10, 160, 30, 150, 30, 170, -10, 30, -110, 75), { pa: 1 }),  // エージェント：後ろに倒れて足で投げる（巴投げ）
+  akKote:       P(25, 60, 40, 50, 60, 55, -70, -30, -20, 0, -0.6),      // 合気道：相手の手首を返す（小手返し）
 };
 function lerpPose(a, b, t, out) {
   const o = out || {};
@@ -636,6 +654,8 @@ function tempoStats(st) {
   s.gravity *= fall; s.fall *= fall;
   // 重力が強くなってもジャンプの高さが同じになるように、跳ぶ力も上げる
   s.jump *= Math.sqrt(fall); s.djump *= Math.sqrt(fall);
+  // jumpH：ジャンプの高さの倍率（高さは跳ぶ勢いの2乗に比例するので、勢いは√倍）
+  const jh = Math.sqrt(T.jumpH || 1); s.jump *= jh; s.djump *= jh;
   return s;
 }
 function buildMoves(c) {
@@ -809,6 +829,8 @@ for (const k of ['idle', 'idle2', 'walk1', 'walk2', 'walk3', 'walk4', 'run1', 'r
   'takeoff', 'jump', 'tuck', 'fall', 'fastfall', 'helpless', 'shield', 'hurtLight', 'hurt', 'hurtHigh', 'tumble', 'launchFly', 'down',
   'grab', 'hold', 'grabbed', 'ledgeHang', 'ledgeClimb', 'getupSweep', 'dodgeSpot', 'dodgeAir']) QPOSES[k] = POSES['q_' + k];
 QPOSES.kickWind = POSES.q_swipeWind; QPOSES.kick = POSES.q_swipe; // 崖攻撃など共通の技は、猫は引っかきで
+// フォロースルー（行きすぎ）をつける角度（回転・向き・位置はつけない）
+const FOLLOW_KEYS = ['t', 'fa1', 'fa2', 'ba1', 'ba2', 'fl1', 'fl2', 'bl1', 'bl2'];
 const SPRING = {
   move: [0.62, 0.32], loco: [0.34, 0.5], air: [0.24, 0.6], hurt: [0.4, 0.62], soft: [0.26, 0.55], snap: [0.8, 0.2], land: [0.3, 0.58],
 };
@@ -1375,6 +1397,27 @@ class Fighter {
     }
     // ため撃ち（Bを押している間ためて、離すと発射。シールドでやめられる）
     const hs = m.holdShot;
+    if (hs && this.chargeBtn === 'B' && f === hs.f && !this.chargeDone && hs.toggle) {
+      // toggle（ロボのビーム球）：1回押すとためはじめ、もう1回押すと発射。ため切ったあとも、好きなときに撃てる。
+      //   シールドでやめると、ためた分を残しておける（次にBを押したら、すぐその強さで撃つ）
+      if (this.chargeT === 0 && this.storedShot > 0) {
+        this.shotT = this.storedShot; this.chargeT = Math.round(this.storedShot * hs.max); this.storedShot = 0;
+        this.chargeDone = true; this.charging = false;
+      } else {
+        if (pad.take('shield')) { this.storedShot = this.shotT; this.charging = false; this.endMove(); if (this.storedShot > 0.05) SFX.play('charged'); return; }
+        const fire = this.chargeT >= 2 && pad.take('B');
+        if (!fire) {
+          this.chargeT++; this.charging = true;
+          this.shotT = Math.min(1, this.chargeT / hs.max);
+          if (this.chargeT === hs.max) { this.b.fx.ring(this.hand[0], this.hand[1], '#ffe9a8', 46); SFX.play('charged'); }
+          this.activeF = -1;
+          if (this.grounded) this.vx = approach(this.vx, 0, this.gf);
+          else { this.airDrift(pad, 0.5); this.vxSet = true; if (this.vy > 1.5) this.vy = 1.5; }
+          return;
+        }
+        this.chargeDone = true; this.charging = false;
+      }
+    }
     if (hs && this.chargeBtn === 'B' && f === hs.f && !this.chargeDone) {
       if (pad.take('shield')) { this.charging = false; this.endMove(); return; }
       if (pad.held.B && this.chargeT < hs.max + hs.over) {
@@ -1898,6 +1941,7 @@ class Fighter {
     if (speedDown > 6) this.b.fx.dust(this.x, 0, 0.8);
   }
   respawn() {
+    this.storedShot = 0; // ためておいたビーム球は、やられたら消える
     this.spawn(this.slot === 0 ? -150 : 150, -380, this.slot === 0 ? 1 : -1);
     this.invuln = D.rules.respawnInvincible;
   }
@@ -2085,10 +2129,27 @@ class Fighter {
     const get = e => (e[2] ? Object.assign(copyPose(PS[e[1]]), e[2]) : PS[e[1]]);
     if (!k || !k.length) return PS.idle;
     if (f <= k[0][0]) return get(k[0]);
+    // 動きのメリハリ（スマブラのような「ため → 一瞬で当てる → 余韻」）：
+    //   当たる瞬間のポーズ（S）までの区間は、はじめゆっくり・最後に一気に（ムチのように）、しかも1コマ早く届く。
+    //   それより前（かまえ）は、すっと構えてから止まる。当たったあとは、少し行きすぎてから戻る（フォロースルー）。
+    let S = -1;
+    if (m.hits && m.hits.length && m.firstHit !== undefined) { for (let i = 1; i < k.length; i++) if (k[i][0] >= m.firstHit - 1) { S = i; break; } }
     for (let i = 0; i < k.length - 1; i++) {
       if (f >= k[i][0] && f < k[i + 1][0]) {
-        const u = (f - k[i][0]) / (k[i + 1][0] - k[i][0]);
-        return catmull(get(k[Math.max(0, i - 1)]), get(k[i]), get(k[i + 1]), get(k[Math.min(k.length - 1, i + 2)]), u);
+        const t0 = k[i][0], t1 = k[i + 1][0];
+        let u = (f - t0) / (t1 - t0);
+        if (S > 0) {
+          if (i + 1 === S && t1 - t0 >= 3) { u = Math.min(1, (f - t0) / Math.max(1, t1 - 1 - t0)); u = u * u * (0.4 + 0.6 * u) + u * 0.25 * (1 - u); } // かまえ → 当たる瞬間：最後に一気に
+          else if (i + 1 < S) u = 1 - (1 - u) * (1 - u);                // かまえに入る：すっと入って止まる
+          else if (i >= S) u = u * u * (3 - 2 * u);                     // 戻り：なめらかに
+        }
+        let p = catmull(get(k[Math.max(0, i - 1)]), get(k[i]), get(k[i + 1]), get(k[Math.min(k.length - 1, i + 2)]), u);
+        // フォロースルー：当たる瞬間から数コマ、振った向きに少し行きすぎる（腕・足・体の角度だけ）
+        if (S > 0 && f >= k[S][0] && f < k[S][0] + 6) {
+          const A = get(k[S]), Bp = get(k[S - 1]), w = Math.sin(Math.PI * (f - k[S][0]) / 6) * 0.16;
+          if (w > 0) { p = copyPose(p); for (const key of FOLLOW_KEYS) p[key] += (A[key] - Bp[key]) * w; }
+        }
+        return p;
       }
     }
     return get(k[k.length - 1]);
@@ -2150,14 +2211,21 @@ class Fighter {
         const j = this.trailJoint, q = pts[j];
         const baseK = this.look.quad ? { fH: 'fW', bH: 'bW', fF: 'fA', bF: 'bA' }[j] : { fH: 'fE', bH: 'bE', fF: 'fK', bF: 'bK' }[j];
         let ex = 0, ey = 0, base = pts[baseK] || q;
-        if (j === 'fH' && (this.c.weapon === 'bow' || this.c.weapon === 'mirror' || this.c.weapon === 'katana')) {
+        // 刃のある武器は、刃の先までの長さ（見た目の武器と同じ長さ）
+        const BLADE = { katana: KATANA_LEN + 4, gsword: 74, shield: 38, chain: 45 }, sc0 = this.look.scale || 1;
+        const blade = j === 'fH' && BLADE[this.c.weapon];
+        if (j === 'fH' && (this.c.weapon === 'bow' || this.c.weapon === 'mirror' || blade)) {
           const e = pts.fE, dx = q[0] - e[0], dy = q[1] - e[1], l = Math.hypot(dx, dy) || 1;
-          const L = this.c.weapon === 'katana' ? KATANA_LEN * (this.look.scale || 1) : 14; // 刀は刀の先の軌跡
+          const L = blade ? BLADE[this.c.weapon] * sc0 : 14;
           ex = dx / l * L; ey = dy / l * L;
-          if (this.c.weapon === 'katana') base = q; // 刀は、つばから先までの帯
+          if (blade) base = q; // 刃のある武器は、つばから先までの帯（スマブラの剣の軌跡のように、刃全体がなでた面）
+        } else if (!blade) {
+          // 手足は、先を少しだけ伸ばす（拳・足先の少し外側までが軌跡）
+          const bk = pts[baseK] || q, dx = q[0] - bk[0], dy = q[1] - bk[1], l = Math.hypot(dx, dy) || 1;
+          ex = dx / l * 5 * sc0; ey = dy / l * 5 * sc0;
         }
-        // 根元は先から少しだけ（帯の太さ）
-        const bx = base[0] - (q[0] + ex), by = base[1] - (q[1] + ey), bl = Math.hypot(bx, by) || 1, wdt = this.c.weapon === 'katana' ? bl : Math.min(bl, 16 * (this.look.scale || 1));
+        // 根元は先から少しだけ（帯の太さ）。刃の武器は刃の長さ全部
+        const bx = base[0] - (q[0] + ex), by = base[1] - (q[1] + ey), bl = Math.hypot(bx, by) || 1, wdt = blade ? bl : Math.min(bl, 22 * sc0);
         p = W([q[0] + ex, q[1] + ey]).concat(W([q[0] + ex + bx / bl * wdt, q[1] + ey + by / bl * wdt]));
       }
       this.trail.push(p);
@@ -2629,7 +2697,7 @@ class CpuBrain {
         if (pl.t > 2 && Math.abs(op.x - me.x) < 110 && me.charging) pl.t = 1; // 近づかれたら早めに撃つ
       }
       if (pl.type === 'fullhop') p.held.jump = true;
-      if (--pl.t <= 0) { this.plan = null; p.held.shield = false; p.held.jump = false; }
+      if (--pl.t <= 0) { if (pl.type === 'holdB' && me.charging && me.move && me.move.holdShot && me.move.holdShot.toggle) p.press('B'); this.plan = null; p.held.shield = false; p.held.jump = false; } // 押して撃つタイプのため（ロボ）は、もう1回押して撃つ
       if (pl.type !== 'fullhop') return;
     }
     p.held.shield = false;
@@ -3385,6 +3453,7 @@ class Battle {
     if (base.type === 'drill') { SFX.play('shoot', 1); SFX.play('wire'); }
     if (base.type === 'shard') SFX.play('ice', 0.4);
     if (base.type === 'fireball') { SFX.play('fire', power); o.r = base.r * (1 + power * 0.8); }
+    if (base.type === 'orb') { SFX.play('beam', 0.3 + power * 0.5); o.r = lerp(base.r, base.r2 || base.r, power); this.fx.ring(owner.x + (ev.x || 0) * owner.facing, owner.y - (ev.y || 0), '#8fe6ff', 24 + power * 30); owner.vx = -owner.facing * (1 + power * 3); owner.vxSet = true; } // ビーム球：ためるほど大きい・反動
     if (base.type === 'mine') {
       // 地雷：足元の前に置く（空中なら真下に落ちる）
       Object.assign(o, { x: owner.x + (ev.x || 0) * owner.facing, y: owner.grounded ? (owner.groundY || 0) : owner.y, vx: 0, vy: 0, onGround: owner.grounded });
@@ -4400,9 +4469,11 @@ function drawMatchText(b, tick) {
   ctx.save();
   ctx.globalAlpha = a;
   ctx.translate(W / 2, H * 0.42); ctx.rotate(-0.06);
-  ctx.font = `900 ${fs}px "Arial Black", "Hiragino Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round'; ctx.lineWidth = fs * 0.12; ctx.strokeStyle = '#141a3a'; ctx.strokeText(text, 0, 0);
-  ctx.fillStyle = col; ctx.fillText(text, 0, 0);
+  ctx.transform(1, 0, -0.16, 1, 0, 0); // 斜体
+  ctx.font = `${hudFontsOK ? '' : '900 '}${fs}px "Dela Gothic One", "Arial Black", "Hiragino Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round'; ctx.lineWidth = fs * 0.14; ctx.strokeStyle = '#141a3a'; ctx.strokeText(text, 0, 0);
+  const tg = ctx.createLinearGradient(0, -fs * 0.45, 0, fs * 0.45); tg.addColorStop(0, '#ffffff'); tg.addColorStop(0.45, col); tg.addColorStop(1, mixHex(col, '#000000', 0.25));
+  ctx.fillStyle = tg; ctx.fillText(text, 0, 0);
   ctx.lineWidth = fs * 0.03; ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.strokeText(text, 0, 0);
   ctx.restore();
 }
@@ -4738,33 +4809,67 @@ function circleImg(g, im, x, y, r, ring) {
   g.restore();
   if (ring) { g.strokeStyle = ring; g.lineWidth = Math.max(1.5, r * 0.14); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
 }
+// HUD（スマブラ風）：ななめのパネル、パネルからはみ出す顔、太い斜体の％（％が上がるほど白→黄→橙→赤→暗い赤）、小数点、ストックの顔
+const HUD_NUM = '"Anton", "Arial Black", "Hiragino Sans", sans-serif';
+const HUD_JP = '"Dela Gothic One", "Hiragino Sans", sans-serif';
+let hudFontsOK = false;
+if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('40px "Anton"'), document.fonts.load('12px "Dela Gothic One"')]).then(() => { hudFontsOK = true; hudCache.clear(); }).catch(() => {});
 function hudPanel(f) {
-  const pc = f.alive ? Math.floor(f.percent) : 0;
+  const pcF = f.alive ? f.percent : 0, pc = Math.floor(pcF), dec = Math.floor((pcF - pc) * 10);
   const vc = f.vc || f.c, im = face(vc);
   const fuelK = f.c.jetFuel ? Math.round(f.fuel / f.c.jetFuel * 24) : -1;
-  const key = `${f.slot}|${pc}|${f.stocks}|${vc.name}|${view.dpr}|${!!im}|${!!f.outfit2}|${fuelK}`;
+  const key = `${f.slot}|${pc}.${dec}|${f.stocks}|${vc.name}|${view.dpr}|${!!im}|${!!f.outfit2}|${fuelK}|${hudFontsOK}|${f.alive}`;
   let c = hudCache.get(f.slot);
   if (c && c.key === key) return c.canvas;
-  const w = 150, h = 50, dpr = view.dpr;
+  const w = 168, h = 72, dpr = view.dpr, SK = 10; // SK：ななめの量
   const cv = (c && c.canvas) || document.createElement('canvas');
   cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
   const g = cv.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
-  g.fillStyle = 'rgba(8,12,30,0.62)'; rr(g, 0, 0, w, h, 10); g.fill();
-  g.fillStyle = f.color; g.fillRect(0, 8, 4, 34);
-  // 顔とストック（残り人数ぶんの小さな顔）
-  circleImg(g, im, 25, 24, 16, f.color);
-  g.textAlign = 'left'; g.font = 'bold 10px -apple-system, "Hiragino Sans", sans-serif';
-  g.fillStyle = '#c9cff0'; g.fillText(`${f.label}：${vc.name}`, 46, 14);
-  for (let s2 = 0; s2 < f.stocks; s2++) circleImg(g, im, 52 + s2 * 13, 37, 5.5, 'rgba(255,255,255,0.7)');
-  g.textAlign = 'right'; g.font = 'bold 26px -apple-system, "Hiragino Sans", sans-serif';
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillText(`${pc}%`, w - 7, 45);
-  g.fillStyle = pctColor(pc); g.fillText(`${pc}%`, w - 8, 44);
+  const par = (x, y, ww, hh) => { g.beginPath(); g.moveTo(x + SK, y); g.lineTo(x + ww, y); g.lineTo(x + ww - SK, y + hh); g.lineTo(x, y + hh); g.closePath(); };
+  // パネル（下半分）：暗いグラデーション＋上のふちの光＋キャラ色の帯
+  const py = 18, ph = h - py - 12;
+  const bg = g.createLinearGradient(0, py, 0, py + ph); bg.addColorStop(0, 'rgba(30,36,70,0.92)'); bg.addColorStop(1, 'rgba(6,8,22,0.92)');
+  g.fillStyle = bg; par(4, py, w - 6, ph); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 1; par(4, py, w - 6, ph); g.stroke();
+  g.fillStyle = f.color; par(4, py + ph - 5, w - 6, 5); g.fill();
+  // 顔：パネルの左から上にはみ出す
+  g.save(); par(6, 2, 58, h - 19); g.clip();
+  const fg = g.createLinearGradient(0, 0, 0, h); fg.addColorStop(0, f.color); fg.addColorStop(1, 'rgba(10,12,30,1)');
+  g.fillStyle = fg; g.fillRect(0, 0, 70, h);
+  if (im) { const s2 = 64; g.drawImage(im, 4, -4, s2, s2 * (im.naturalHeight / im.naturalWidth)); }
+  g.restore();
+  g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 1.5; par(6, 2, 58, h - 19); g.stroke();
+  // 名前（パネルの上、小さく）
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.font = `10px ${hudFontsOK ? HUD_JP : '-apple-system, "Hiragino Sans", sans-serif'}`;
+  // 「あなた／CPU」（キャラの色）と名前を、パネルの上に並べる
+  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.75)';
+  const lf = `bold 9px -apple-system, "Hiragino Sans", sans-serif`, nf = g.font;
+  g.font = lf; const lw = g.measureText(f.label).width; g.strokeText(f.label, 68, py - 3); g.fillStyle = f.color; g.fillText(f.label, 68, py - 3);
+  g.font = nf; g.strokeText(vc.name, 72 + lw, py - 3); g.fillStyle = '#fff'; g.fillText(vc.name, 72 + lw, py - 3);
+  // ストック：小さな顔を、パネルの下に
+  for (let s2 = 0; s2 < f.stocks; s2++) circleImg(g, im, 70 + s2 * 12, h - 5.5, 4.6, 'rgba(255,255,255,0.9)');
+  // ％：太い斜体、黒いふち。小数点と％は小さく
+  const col = f.alive ? pctColor(pc) : '#8890b0';
+  const big = hudFontsOK ? 36 : 28, num = String(pc);
+  g.save(); g.translate(w - 14, py + ph - 7); g.transform(1, 0, -0.2, 1, 0, 0);
+  g.textAlign = 'right'; g.lineJoin = 'round';
+  g.font = `bold 13px ${HUD_NUM}`; const pw = g.measureText('%').width;
+  g.font = `bold 15px ${HUD_NUM}`; const dw = g.measureText('.' + dec).width;
+  g.font = `${hudFontsOK ? '' : '900 '}${big}px ${HUD_NUM}`;
+  const nx = -pw - dw - 1;
+  g.lineWidth = 6; g.strokeStyle = '#0a0c18'; g.strokeText(num, nx, 0);
+  const ng = g.createLinearGradient(0, -big * 0.85, 0, 0); ng.addColorStop(0, '#ffffff'); ng.addColorStop(0.35, col); ng.addColorStop(1, col);
+  g.fillStyle = ng; g.fillText(num, nx, 0);
+  g.font = `bold 15px ${HUD_NUM}`; g.lineWidth = 4; g.strokeText('.' + dec, -pw - 1, 0); g.fillStyle = col; g.fillText('.' + dec, -pw - 1, 0);
+  g.font = `bold 13px ${HUD_NUM}`; g.strokeText('%', 0, 0); g.fillText('%', 0, 0);
+  g.restore();
   // ジェットの燃料ゲージ（ロボ）
   if (fuelK >= 0) {
-    g.fillStyle = 'rgba(255,255,255,0.15)'; rr(g, 46, 18, 46, 5, 2.5); g.fill();
-    g.fillStyle = fuelK > 6 ? '#7fe3ff' : '#ff7a5a'; rr(g, 46, 18, Math.max(2, 46 * fuelK / 24), 5, 2.5); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.15)'; rr(g, 70, py + 5, 46, 4, 2); g.fill();
+    g.fillStyle = fuelK > 6 ? '#7fe3ff' : '#ff7a5a'; rr(g, 70, py + 5, Math.max(2, 46 * fuelK / 24), 4, 2); g.fill();
   }
   hudCache.set(f.slot, { key, canvas: cv });
   return cv;
@@ -4791,10 +4896,23 @@ function drawHUD(b) {
   const W = view.w, H = view.h, ins = view.inset;
   const left = ins.l + 30 + D.controls.stickRadius * 2 + 22, right = W - ins.r - 252;
   const gap = 10, avail = right - left;
-  const boxW = clamp((avail - gap) / 2, 96, 150), boxH = boxW / 3;
+  const boxW = clamp((avail - gap) / 2, 104, 168), boxH = boxW * 72 / 168;
   const mid = avail >= boxW * 2 + gap ? (left + right) / 2 : W / 2;
-  const x0 = mid - boxW - gap / 2, y = H - ins.b - boxH - 8;
-  b.f.forEach((f, i) => ctx.drawImage(hudPanel(f), x0 + i * (boxW + gap), y, boxW, boxH));
+  const x0 = mid - boxW - gap / 2, y = H - ins.b - boxH - 6;
+  b.f.forEach((f, i) => {
+    // ダメージを受けると、パネルがはねて揺れる（大きいダメージほど強く）。撃墜されたら白く光る
+    const hs = f._hud || (f._hud = { p: f.percent, t: 0, amp: 0, st: f.stocks, flash: 0 });
+    if (f.percent > hs.p + 0.05) { const d = f.percent - hs.p; hs.t = 16; hs.amp = Math.min(7, 1.5 + d * 0.35); }
+    if (f.stocks < hs.st) hs.flash = 30;
+    hs.p = f.percent; hs.st = f.stocks;
+    let ox = 0, oy = 0, sc = 1;
+    if (hs.t > 0) { const k = hs.t / 16; ox = Math.sin(hs.t * 2.3) * hs.amp * k; oy = -Math.abs(Math.sin(hs.t * 1.7)) * hs.amp * 0.6 * k; sc = 1 + 0.08 * k; hs.t--; }
+    const px = x0 + i * (boxW + gap), cx = px + boxW / 2, cy = y + boxH / 2;
+    ctx.save(); ctx.translate(cx + ox, cy + oy); ctx.scale(sc, sc);
+    ctx.drawImage(hudPanel(f), -boxW / 2, -boxH / 2, boxW, boxH);
+    if (hs.flash > 0) { ctx.globalAlpha = hs.flash / 30 * 0.7; ctx.fillStyle = '#ffffff'; ctx.fillRect(-boxW / 2, -boxH / 2 + boxH * 0.25, boxW, boxH * 0.6); hs.flash--; }
+    ctx.restore();
+  });
 }
 function drawControls() {
   const c = controls;
@@ -4982,7 +5100,20 @@ $('opVideo').addEventListener('ended', () => $('opening').classList.add('ended')
 $('opVideo').addEventListener('error', () => { OP.ok = false; if (state.screen === 'title') show('title'); }); // 映像がないときは文字のタイトル
 show('title');
 $('btnBack').addEventListener('click', () => { show('title'); state.screen = 'title'; });
-$('btnFight').addEventListener('click', startBattle);
+// 対戦の前の「VS」画面（スマブラのように、2人の顔が左右から入ってきて、真ん中に VS）。その間に裏で試合の準備をしておく
+function startWithVS() {
+  if (state.gameMode === 'training') { startBattle(); return; }
+  const vs = $('vs'), a = D.characters[state.p1], c = D.characters[state.cpu];
+  $('vsImgL').src = a.portrait; $('vsImgR').src = c.portrait;
+  $('vsNameL').textContent = a.name; $('vsNameR').textContent = c.name;
+  vs.classList.remove('out'); vs.classList.add('show');
+  startBattle(); state.paused = true; // 準備だけして、VS が終わるまで止めておく
+  SFX.play('charged');
+  setTimeout(() => { SFX.play('hitH'); }, 380);
+  setTimeout(() => { vs.classList.add('out'); state.paused = false; acc = 0; }, 1700);
+  setTimeout(() => { vs.classList.remove('show', 'out'); }, 2100);
+}
+$('btnFight').addEventListener('click', startWithVS);
 // トレーニングの操作パネル
 const TR_CPU = [['stand', '止まる'], ['walk', '歩く'], ['jump', 'ジャンプ'], ['shield', 'シールド'], ['fight', '戦う']];
 function updateTrainBar() {

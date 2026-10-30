@@ -97,20 +97,18 @@ function makeRig(f) {
   } else if (w === 'bow') {
     const bm = new THREE.MeshStandardMaterial({ color: 0xc99a5b, roughness: 0.5 });
     rig.bowArc = Math.PI * 0.8;
-    rig.bow = new THREE.Mesh(new THREE.TorusGeometry(24, 2, 8, 24, rig.bowArc), bm); g.add(rig.bow);
+    { const nb = makeBow(rig.bowArc); rig.bow = nb.g; g.add(rig.bow); mats.push(...nb.mats); } // 参考画像3の弓
     const sm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
     rig.str1 = new THREE.Mesh(CYL, sm); rig.str1.userData.r = 0.5; g.add(rig.str1);
     rig.str2 = new THREE.Mesh(CYL, sm); rig.str2.userData.r = 0.5; g.add(rig.str2);
-    rig.arrowMat = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0x000000 });
+    rig.arrowMat = new THREE.MeshStandardMaterial({ color: 0x1c2b5c, emissive: 0x000000, metalness: 0.4, roughness: 0.35 }); // 紺の軸（参考画像4）
     rig.arrow = new THREE.Mesh(CYL, rig.arrowMat); rig.arrow.userData.r = 0.9; g.add(rig.arrow);
     rig.glow = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
     rig.glow.visible = false; g.add(rig.glow);
     // 旋矢（横B）：後ろの手でバトンのように回す矢と、回転の残像
     rig.twirl = new THREE.Group(); rig.twirl.visible = false; g.add(rig.twirl);
     const tw = new THREE.Group(); rig.twirl.add(tw); rig.twirlSpin = tw;
-    const tshaft = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 40, 8), new THREE.MeshStandardMaterial({ color: 0xf3e3c0 })); tw.add(tshaft);
-    const thead = new THREE.Mesh(new THREE.ConeGeometry(2.6, 8, 8), new THREE.MeshStandardMaterial({ color: new THREE.Color(f.color), metalness: 0.5, roughness: 0.3 })); thead.position.y = 23; tw.add(thead);
-    const tfl = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7, 0.6), new THREE.MeshStandardMaterial({ color: 0xffffff })); tfl.position.y = -18; tw.add(tfl);
+    { const am = makeArrowMesh(false, true); am.children.forEach(c => { if (c.material) { c.material.transparent = false; c.material.opacity = 1; } }); am.rotation.z = Math.PI / 2; am.scale.setScalar(1.25); am.position.y = 8; tw.add(am); } // 回す矢も参考画像4の矢
     rig.twirlBlur = new THREE.Mesh(new THREE.CircleGeometry(23, 28), new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }));
     rig.twirl.add(rig.twirlBlur);
     mats.push(bm);
@@ -218,19 +216,14 @@ function makeRig(f) {
   } else if (w === 'chain') {
     // 鎖鎌：手前の手に鎌。鎖（ワイヤー）と分銅は技の間だけ
     const sc = f.look.scale || 1;
-    rig.sickle = new THREE.Group(); g.add(rig.sickle);
-    const hm = new THREE.MeshStandardMaterial({ color: 0x2a1c18, roughness: 0.8 });
-    const bm = new THREE.MeshStandardMaterial({ color: 0xc9ced8, metalness: 0.75, roughness: 0.22, emissive: 0x000000 });
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 16 * sc, 8), hm); handle.position.y = 6 * sc; rig.sickle.add(handle);
-    const blade = new THREE.Mesh(new THREE.TorusGeometry(8 * sc, 1.1, 6, 16, Math.PI * 0.75), bm);
-    blade.position.set(-8 * sc, 14 * sc, 0); blade.rotation.z = -0.2; rig.sickle.add(blade);
-    const redM = new THREE.MeshStandardMaterial({ color: 0xc0182a, emissive: 0x400008, roughness: 0.4 });
-    const edge = new THREE.Mesh(new THREE.TorusGeometry(8.6 * sc, 0.45, 4, 16, Math.PI * 0.6), redM); edge.position.copy(blade.position); edge.rotation.z = -0.15; rig.sickle.add(edge);
-    rig.sickleMat = bm;
+    // 参考画像5：鎖のついた黒い刀（赤いオーラ）
+    const cb = makeChainBlade(sc); rig.sickle = cb.g; g.add(rig.sickle);
+    rig.sickleMat = cb.blackM;
+    const bm = cb.blackM, hm = cb.blackM, redM = cb.g.userData.auraM;
     const cm = new THREE.MeshStandardMaterial({ color: 0x3a3d45, metalness: 0.7, roughness: 0.35 });
     rig.wire = new THREE.Mesh(CYL, cm); rig.wire.userData.r = 1.0; rig.wire.visible = false; scene.add(rig.wire);
     rig.hook = new THREE.Mesh(new THREE.OctahedronGeometry(4.2), new THREE.MeshStandardMaterial({ color: 0x2a2d33, metalness: 0.8, roughness: 0.3, emissive: 0x300006 })); rig.hook.visible = false; scene.add(rig.hook);
-    mats.push(bm, hm, redM);
+    mats.push(bm); // オーラ（すけている）は点滅の対象にしない（すけ具合が上書きされて四角く見えるため）
   } else if (w === 'tako') {
     // タコ：頭にクラゲのような大きなかさ、下に8本の触手（ゆらゆら）
     const sc = f.look.scale || 1;
@@ -264,12 +257,17 @@ function makeRig(f) {
   // 足元の影
   // 攻撃の残像（帯）：先と根元の2点の軌跡を、なめらかな帯にする
   {
+    // 帯は3列：先のふち（白くはっきり）・ふちのすぐ内側（はっきり）・根元（うすい）。先のふちがくっきりした「スマブラの剣の軌跡」になる
     const N = 40, geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
-    const idx = []; for (let i = 0; i < N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3 * 3), 3));
+    const idx = []; for (let i = 0; i < N - 1; i++) for (let r = 0; r < 2; r++) { const a = i * 3 + r, c = a + 3; idx.push(a, a + 1, c, a + 1, c + 1, c); }
     geo.setIndex(idx);
-    rig.ribbon = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    // 色＋すけ具合を点ごとに持つ（明るいステージでも見えるように、足し算ではなくふつうの重ね方で、先は白く根元はすける）
+    geo.setAttribute('rgba', new THREE.BufferAttribute(new Float32Array(N * 3 * 4), 4));
+    rig.ribbon = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+      vertexShader: 'attribute vec4 rgba; varying vec4 vC; void main(){ vC = rgba; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'varying vec4 vC; void main(){ gl_FragColor = vC; }',
+      transparent: true, side: THREE.DoubleSide, depthWrite: false }));
     rig.ribbon.frustumCulled = false; rig.ribbon.visible = false; rig.ribbonN = N; scene.add(rig.ribbon);
   }
   rig.shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
@@ -277,6 +275,174 @@ function makeRig(f) {
   scene.add(rig.shadow);
   scene.add(g);
   return rig;
+}
+/* ---------- 武器・飛び道具の形（参考画像から作ったもの） ---------- */
+const ADD = THREE.AdditiveBlending;
+// 中心線（点のならび）と太さから、帯の形を作る（ブーメランの腕など）
+function bandShape(pts, w0, w1) {
+  const L = [], Rr = [], n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    let dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    const w = (w0 + (w1 - w0) * i / (n - 1)) / 2;
+    L.push([pts[i][0] - dy * w, pts[i][1] + dx * w]); Rr.push([pts[i][0] + dy * w, pts[i][1] - dx * w]);
+  }
+  const sh = new THREE.Shape(); sh.moveTo(L[0][0], L[0][1]);
+  for (let i = 1; i < n; i++) sh.lineTo(L[i][0], L[i][1]);
+  for (let i = n - 1; i >= 0; i--) sh.lineTo(Rr[i][0], Rr[i][1]);
+  sh.closePath(); return sh;
+}
+// 盾のブーメラン（参考画像1）：鉄の帯を巻いた「く」の字の刃。片方の腕の内側にトゲ、真ん中は革巻き＋鎖、ルーン文字が光る
+function makeBoomerang() {
+  const g = new THREE.Group();
+  const iron = new THREE.MeshStandardMaterial({ color: 0x6a645c, metalness: 0.6, roughness: 0.45, emissive: 0x1a1612 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2e2924, metalness: 0.6, roughness: 0.5 });
+  const edgeM = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, metalness: 0.9, roughness: 0.15, emissive: 0x2a2826 });
+  const leather = new THREE.MeshStandardMaterial({ color: 0x6a4428, roughness: 0.85 });
+  const rune = new THREE.MeshBasicMaterial({ color: 0xff8a3a });
+  const ex = { depth: 2.4, bevelEnabled: true, bevelThickness: 0.7, bevelSize: 0.7, bevelSegments: 1, curveSegments: 6 };
+  const armA = [[2, 2], [6, 10], [9, 19], [11, 28], [11.5, 34]];          // 長い方の刃（ゆるく曲がる）
+  const armB = [[-2, 2], [-8, 8], [-16, 11], [-24, 10.5], [-29, 7]];      // 曲がった方の刃（内側にトゲ）
+  for (const [arm, w0, w1] of [[armA, 9, 7], [armB, 9, 8]]) {
+    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(bandShape(arm, w0, w1), ex), iron); m.position.z = -1.2; g.add(m);
+    const e = new THREE.Mesh(new THREE.ExtrudeGeometry(bandShape(arm.map(p => [p[0] * 1.02, p[1] * 1.02 + 0.6]), 2, 1.5), { depth: 3, bevelEnabled: false }), edgeM); e.position.z = -1.5; g.add(e);
+    // 鉄の帯（腕を横切る）とリベット
+    for (const t of [0.35, 0.7]) {
+      const i = Math.floor(t * (arm.length - 1)), a = arm[i], b = arm[i + 1], u = t * (arm.length - 1) - i;
+      const x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u, ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(2.2, w0 + 2, 4.6), dark); band.position.set(x, y, 0); band.rotation.z = ang; g.add(band);
+      for (const sd of [-1, 1]) { const rv = new THREE.Mesh(SPH, dark); rv.scale.setScalar(0.8); rv.position.set(x + Math.cos(ang) * sd * 2.6, y + Math.sin(ang) * sd * 2.6, 2.4); g.add(rv); }
+    }
+  }
+  // トゲ（曲がった刃の内側＝下側）
+  for (const [x, y] of [[-12, 7.5], [-19, 7.2], [-26, 4.8]]) { const sp = new THREE.Mesh(new THREE.ConeGeometry(1.9, 7.5, 6), edgeM); sp.position.set(x, y - 3.5, 0); sp.rotation.z = Math.PI; g.add(sp); }
+  // ルーン文字（長い刃にオレンジの光）
+  for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.4), rune); r.position.set(6.5 + i * 1.1, 12 + i * 4.2, 1.6); r.rotation.z = -0.35 + (i % 2) * 0.6; g.add(r); }
+  // 真ん中：革巻きの持ち手と鎖
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 7, 10), leather); grip.position.set(0, 1.5, 0); grip.rotation.z = 0.2; g.add(grip);
+  const lk = new THREE.TorusGeometry(1.3, 0.38, 5, 10);
+  for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(lk, dark); l.position.set(-2 + Math.sin(i * 0.9) * 2, -2 - i * 2.2, 1); l.rotation.set(0, i % 2 ? Math.PI / 2 : 0, 0.3); g.add(l); }
+  const c = new THREE.Group(); g.position.set(-1, -16, 0); c.add(g); // 回転の中心を形の真ん中に
+  return c;
+}
+// ロボのビーム球（参考画像2）：白く光る芯、青とオレンジの稲妻、まわりの光の輪と火花。大きさ1で作って p.r 倍する
+function makeOrb() {
+  const m = new THREE.Group();
+  const blue = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0x1f4fd8, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.BackSide })); blue.scale.setScalar(1.05); m.add(blue);
+  const warm = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, opacity: 0.7, blending: ADD, depthWrite: false })); warm.scale.setScalar(0.55); m.add(warm);
+  const core = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xfffdf0 })); core.scale.setScalar(0.36); m.add(core);
+  const arcs = [];
+  for (let i = 0; i < 8; i++) {
+    const a = new THREE.Mesh(new THREE.TorusGeometry(0.78 + (i % 3) * 0.08, 0.06, 4, 20, Math.PI * (0.7 + (i % 4) * 0.25)),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? 0xff9a1f : 0x47c8ff, transparent: true, opacity: 0.95, depthWrite: false }));
+    a.rotation.set(i * 1.3, i * 0.7, i * 2.1); a.userData.sp = [(i % 3 - 1) * 0.11 + 0.05, 0.07 + (i % 2) * 0.05]; m.add(a); arcs.push(a);
+  }
+  const rings = [];
+  for (let i = 0; i < 2; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1.5 + i * 0.45, 0.025, 4, 40), new THREE.MeshBasicMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.35, blending: ADD, depthWrite: false })); m.add(r); rings.push(r); }
+  const sparks = [];
+  for (let i = 0; i < 10; i++) { const s = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: i % 3 ? 0xffb347 : 0x9fe6ff, blending: ADD, transparent: true, depthWrite: false })); s.scale.setScalar(0.07); s.userData.o = [i * 2.4, 1.15 + (i % 4) * 0.18, (i % 5) * 0.5]; m.add(s); sparks.push(s); }
+  m.userData = { core, warm, blue, arcs, rings, sparks };
+  return m;
+}
+function updateOrb(m, p) {
+  const u = m.userData, t = p.age;
+  m.scale.setScalar(p.r * 1.05);
+  u.arcs.forEach((a, i) => { a.rotation.x += a.userData.sp[0]; a.rotation.y += a.userData.sp[1]; a.material.opacity = 0.55 + Math.random() * 0.45; });
+  u.warm.scale.setScalar(0.55 + Math.sin(t * 0.9) * 0.06);
+  u.blue.scale.setScalar(1.05 + Math.sin(t * 0.4) * 0.08);
+  u.rings.forEach((r, i) => { const k = ((t * 0.04 + i * 0.5) % 1); r.scale.setScalar(0.8 + k * 0.6); r.material.opacity = 0.4 * (1 - k); });
+  u.sparks.forEach(s => { const o = s.userData.o, a = o[0] + t * 0.18; s.position.set(Math.cos(a) * o[1], Math.sin(a * 1.3) * o[1] * 0.8, Math.sin(a) * o[2]); });
+}
+// 弓（参考画像3）：濃い紺の弓に金の飾り、青緑に光る筋、先に氷のような刃。TorusGeometry と同じく、半径24・角度0〜arc の弧の上に作る
+function makeBow(arc) {
+  const g = new THREE.Group(), R0 = 24;
+  const navy = new THREE.MeshStandardMaterial({ color: 0x18213f, metalness: 0.55, roughness: 0.35 });
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd4a648, metalness: 0.85, roughness: 0.25 });
+  const teal = new THREE.MeshBasicMaterial({ color: 0x3fe0c8 });
+  const ice = new THREE.MeshStandardMaterial({ color: 0xd8f0ff, emissive: 0x4a88c8, transparent: true, opacity: 0.85, metalness: 0.2, roughness: 0.05 });
+  const P = a => new THREE.Vector3(Math.cos(a) * R0, Math.sin(a) * R0, 0);
+  class Arc extends THREE.Curve { constructor(a0, a1, r) { super(); this.a0 = a0; this.a1 = a1; this.r = r; } getPoint(t) { const a = this.a0 + (this.a1 - this.a0) * t; return new THREE.Vector3(Math.cos(a) * this.r, Math.sin(a) * this.r, 0); } }
+  const mid = arc / 2;
+  // 本体（上と下の弓）：真ん中ほど太い
+  for (const [a0, a1] of [[0, mid], [mid, arc]]) {
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new Arc(a0, a1, R0), 16, 2.1, 8, false), navy));
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new Arc(a0 + 0.08, a1 - 0.08, R0 + 1.6), 12, 0.45, 5, false), teal));   // 光る筋
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new Arc(a0 + 0.12, a1 - 0.12, R0 + 0.2), 12, 0.35, 5, false), gold)); // 金の線
+  }
+  // 弓の外側に、羽根のような刃（紺）
+  for (let i = 0; i < 8; i++) {
+    const a = 0.25 + (arc - 0.5) * i / 7; if (Math.abs(a - mid) < 0.3) continue;
+    const f = new THREE.Mesh(new THREE.ConeGeometry(1.4, 7, 4), navy); const q = P(a).multiplyScalar(1.12);
+    f.position.copy(q); f.rotation.z = a - Math.PI / 2 + (a < mid ? 0.6 : -0.6); f.scale.z = 0.35; g.add(f);
+  }
+  // 真ん中：金の握りと、翼の飾り
+  const gp = P(mid); const grip = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 7, 10), gold); grip.position.copy(gp); grip.rotation.z = mid; g.add(grip);
+  for (const sd of [-1, 1]) {
+    const w = new THREE.Mesh(new THREE.ConeGeometry(2.2, 9, 4), gold); const q = P(mid + sd * 0.26).multiplyScalar(1.1);
+    w.position.copy(q); w.rotation.z = mid + sd * 0.26 - Math.PI / 2 + sd * 1.1; w.scale.z = 0.3; g.add(w);
+  }
+  // 先の氷の刃（3本ずつ）
+  for (const [a, sd] of [[0, -1], [arc, 1]]) {
+    const tip = P(a);
+    for (let k = 0; k < 3; k++) {
+      const c = new THREE.Mesh(new THREE.ConeGeometry(1.2 - k * 0.2, 11 - k * 2.5, 5), ice);
+      const dir = a + sd * (Math.PI / 2) - sd * k * 0.5; // 弧の接線の向き（外へ）から少しずつ開く
+      c.position.set(tip.x + Math.cos(dir) * (4 - k), tip.y + Math.sin(dir) * (4 - k), 0); c.rotation.z = dir - Math.PI / 2; g.add(c);
+    }
+  }
+  return { g, mats: [navy, gold] };
+}
+// 矢（参考画像4）：紺の軸に金の帯、金のふちの青い水晶の矢じり、青い羽根。+x が先
+function makeArrowMesh(big, faint) {
+  const m = new THREE.Group(), s = big ? 1.35 : 1;
+  const tr = faint ? { transparent: true, opacity: 0.4 } : {};
+  const navy = new THREE.MeshStandardMaterial(Object.assign({ color: 0x1c2b5c, metalness: 0.4, roughness: 0.35 }, tr));
+  const gold = new THREE.MeshStandardMaterial(Object.assign({ color: 0xd8ab4a, metalness: 0.85, roughness: 0.25 }, tr));
+  const crystal = new THREE.MeshStandardMaterial(Object.assign({ color: 0x4f8dff, emissive: 0x1d4fd0, metalness: 0.3, roughness: 0.1 }, tr));
+  const feather = new THREE.MeshStandardMaterial(Object.assign({ color: 0x2c56c8, emissive: 0x0a1f60, roughness: 0.5 }, tr));
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1 * s, 1 * s, 28, 8), navy); shaft.rotation.z = Math.PI / 2; shaft.position.x = -14; m.add(shaft);
+  for (const x of [-4, -22]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * s, 1.35 * s, 1.6, 8), gold); b.rotation.z = Math.PI / 2; b.position.x = x; m.add(b); }
+  const frame = new THREE.Mesh(new THREE.ConeGeometry(4.4 * s, 12 * s, 4), gold); frame.rotation.set(Math.PI / 4, 0, -Math.PI / 2); frame.scale.z = 0.35; frame.position.x = 4 * s; m.add(frame);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(3.4 * s, 12.5 * s, 4), crystal); head.rotation.set(Math.PI / 4, 0, -Math.PI / 2); head.scale.z = 0.55; head.position.x = 4.6 * s; m.add(head);
+  for (const sd of [-1, 1]) { const barb = new THREE.Mesh(new THREE.ConeGeometry(0.9 * s, 5 * s, 4), gold); barb.position.set(-1.5 * s, sd * 3.6 * s, 0); barb.rotation.z = sd * 0.5 + Math.PI / 2 + Math.PI; m.add(barb); }
+  for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 3.2 * s), feather); const a = i * Math.PI * 2 / 3; f.position.set(-25, Math.cos(a) * 1.6, Math.sin(a) * 1.6); f.rotation.x = a; m.add(f); }
+  if (!faint) {
+    const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0x6fb4ff, transparent: true, opacity: big ? 0.4 : 0.18, blending: ADD, depthWrite: false }));
+    gl.scale.set(big ? 24 : 16, big ? 7 : 4, big ? 7 : 4); gl.position.x = -4; m.add(gl);
+  }
+  return m;
+}
+// 鎖鎌の武器（参考画像5）：黒い刀に赤いオーラ。黒いつば、黒い巻きのつか、つかの先から鎖。+Y 方向が刃
+function makeChainBlade(sc) {
+  const g = new THREE.Group(), L = 40 * sc;
+  const blackM = new THREE.MeshStandardMaterial({ color: 0x141418, metalness: 0.85, roughness: 0.22, emissive: 0x000000 });
+  const edgeM = new THREE.MeshStandardMaterial({ color: 0x5a5d66, metalness: 0.9, roughness: 0.15 });
+  // 刃：根元から先へ少しずつ反る（3つの区切り）
+  const b = new THREE.Mesh(new THREE.BoxGeometry(1.0, L, 3.2 * sc), blackM); b.position.y = L / 2 + 2; g.add(b);
+  const e = new THREE.Mesh(new THREE.BoxGeometry(1.15, L, 0.5), edgeM); e.position.set(0, L / 2 + 2, 1.7 * sc); g.add(e); // 刃先の細い光
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(1.7 * sc, 6, 4), blackM); tip.position.set(0, L + 5, 0); tip.rotation.y = Math.PI / 4; tip.scale.x = 0.45; g.add(tip);
+  // つば：四角い黒い枠
+  const tsubaM = new THREE.MeshStandardMaterial({ color: 0x1b1b20, metalness: 0.8, roughness: 0.3 });
+  const ts = new THREE.Mesh(new THREE.TorusGeometry(3.6 * sc, 0.8, 4, 4), tsubaM); ts.rotation.set(Math.PI / 2, 0, Math.PI / 4); ts.position.y = 1; g.add(ts);
+  const ts2 = new THREE.Mesh(new THREE.BoxGeometry(4.5 * sc, 1, 4.5 * sc), tsubaM); ts2.position.y = 1; g.add(ts2);
+  // つか：黒い巻き（ひし形の模様の代わりに、細い帯をななめに）
+  const hiltM = new THREE.MeshStandardMaterial({ color: 0x0d0d10, roughness: 0.75 });
+  const hilt = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 10 * sc, 8), hiltM); hilt.position.y = -4.5 * sc; g.add(hilt);
+  const wrapM = new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.6 });
+  for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.28, 4, 10), wrapM); w.position.y = -1.5 * sc - i * 2.2 * sc; w.rotation.set(Math.PI / 2 + 0.4, 0, 0); g.add(w); }
+  // つかの先の鎖（短く垂れる）
+  const lk = new THREE.TorusGeometry(1.1, 0.32, 5, 10);
+  for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(lk, tsubaM); l.position.set(Math.sin(i * 0.8) * 1.2, -10 * sc - i * 1.9, 0); l.rotation.set(0, i % 2 ? Math.PI / 2 : 0, 0); g.add(l); }
+  // 赤いオーラ（炎の形の板。刃にそって、ゆらゆら）
+  // 赤いオーラ：ふちがぼやけた赤い光の玉を刃にそって並べ、ゆらゆら大きさを変える（炎がまとわりつくように見せる）
+  const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 64; const cx = cv2.getContext('2d');
+  const gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+  const auraM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv2), color: 0xe8001e, transparent: true, opacity: 0.65, depthWrite: false });
+  const aura = [], PG = new THREE.PlaneGeometry(1, 1);
+  for (let i = 0; i < 9; i++) { const a = new THREE.Mesh(PG, auraM); a.userData.b = [2.6 + (i % 3) * 1.8, 5 + i * (L / 8.5), (8 + (i % 3) * 3.5) * sc, i * 1.9]; a.position.set(a.userData.b[0], a.userData.b[1], -1); g.add(a); aura.push(a); }
+  g.userData.aura = aura; g.userData.auraM = auraM;
+  return { g, blackM };
 }
 function setSeg(mesh, a, b) {
   tmpD.subVectors(b, a);
@@ -421,7 +587,7 @@ function updateRig(rig, f, alpha, G) {
     rig.cannon.scale.setScalar(sc2);
     rig.cannon.position.set(fH3.x - ux * 6 * sc2, fH3.y - uy * 6 * sc2, fH3.z + 2);
     rig.cannon.rotation.set(0, 0, ang - Math.PI / 2);
-    const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : 0;
+    const st = f.charging && f.move && f.move.holdShot ? f.shotT || 0 : (f.storedShot || 0); // ためておいたビーム球も、砲口で光る
     rig.cannonOrb.visible = st > 0.05;
     if (st > 0.05) rig.cannonOrb.scale.setScalar(2 + st * 7 + Math.sin(performance.now() / 50) * 0.8);
     rig.cannonGlowM.color.setRGB(0.37 + st * 0.6, 0.8 + st * 0.2, 1);
@@ -432,6 +598,10 @@ function updateRig(rig, f, alpha, G) {
     rig.sickle.rotation.set(0, 0, ang - Math.PI / 2);
     const act = f.state === 'move' && f.activeF >= 0 && f.move.hits && f.activeHits().length > 0;
     rig.sickleMat.emissive.setHex(act ? 0x501018 : 0x000000);
+    { const t = performance.now() / 1000, au = rig.sickle.userData; // 赤いオーラがゆらめく（技の間は強く）
+      au.auraM.opacity = (act ? 0.9 : 0.65) + Math.sin(t * 9) * 0.08;
+      au.aura.forEach(a => { const q = a.userData.b, k = (0.75 + Math.sin(t * 8 + q[3]) * 0.3) * (act ? 1.6 : 1);
+        a.scale.set(q[2] * k, q[2] * k * 1.5, 1); a.position.x = q[0] + Math.sin(t * 5 + q[3]) * 0.8 + (act ? 1.5 : 0); }); }
     // 鎖の長さで、鎖の太さと分銅の大きさが変わる（長い＝細い、短い＝太い）
     const ck = [0.7, 1, 1.5][f.chainMode || 0];
     rig.wire.userData.r = ck; rig.hook.scale.setScalar(ck);
@@ -460,7 +630,7 @@ function updateRig(rig, f, alpha, G) {
     rig.kshield.position.set(bE3.x + bdx * 0.55, bE3.y + bdy * 0.55, (bE3.z + bH3.z) / 2 + 5);
     rig.kshield.rotation.set(0, 0.95, Math.atan2(bdy / bl, bdx / bl) - Math.PI / 2);
     const thrown = G.state.battle && G.state.battle.projectiles.some(p => p.maker === f && p.type === 'disc' && !p.dead);
-    rig.kshield.visible = !thrown;
+    rig.kshield.visible = true; // ブーメランは盾とは別の物なので、投げても盾は手に残る
     const ref = !!f.activeWindow('reflect');
     rig.kshieldMat.emissive.setHex(ref ? 0x2f6f9f : 0x000000);
     rig.kshieldGlow.color.setHex(ref || (f.charging && f.move && f.move.key.startsWith('nspecial')) ? 0xd8f4ff : 0x6fc4ff);
@@ -564,14 +734,21 @@ function updateRig(rig, f, alpha, G) {
     rig.shadow.material.opacity = 0.3 * s;
   }
 }
-// 残像の帯：軌跡の点をなめらかな曲線にして、新しいほど明るく太く
-const RIB_COL = { katana: [0.75, 0.9, 1], gsword: [0.45, 0.7, 1], shield: [0.85, 0.92, 1], skate: [0.6, 0.95, 1], fire: [1, 0.55, 0.15], ice: [0.6, 0.95, 1], beam: [0.5, 0.85, 1], elec: [0.5, 0.9, 1] };
+// 残像の帯（スマブラの剣・蹴りの軌跡のように）：軌跡の点をなめらかな曲線にして、新しいほど明るく太く。
+//   先のふち＝白くはっきり、根元のふち＝武器の色でうすく。強い技ほど濃い
+const RIB_COL = { katana: [0.7, 0.88, 1], gsword: [0.35, 0.62, 1], shield: [0.8, 0.9, 1], chain: [1, 0.15, 0.25], skate: [0.5, 0.92, 1], bow: [0.45, 0.75, 1],
+  fire: [1, 0.5, 0.12], ice: [0.55, 0.95, 1], beam: [0.45, 0.85, 1], elec: [0.5, 0.9, 1] };
 function updateRibbon(rig, f) {
   const t = f.trail;
   if (!t || t.length < 2 || !t[0] || t[0].length < 4) return;
-  const N = rig.ribbonN, pos = rig.ribbon.geometry.attributes.position, col = rig.ribbon.geometry.attributes.color;
+  const N = rig.ribbonN, pos = rig.ribbon.geometry.attributes.position, col = rig.ribbon.geometry.attributes.rgba;
   const m = f.state === 'move' ? f.move : null;
-  const c = RIB_COL[(m && m.elem) || (m && m.hits && m.hits.some(h => h.elec) ? 'elec' : f.c.weapon)] || [1, 1, 1];
+  let c = RIB_COL[(m && m.elem) || (m && m.hits && m.hits.some(h => h.elec) ? 'elec' : f.c.weapon)];
+  if (!c) { const cc = new THREE.Color(f.color); c = [0.3 + cc.r * 0.7, 0.3 + cc.g * 0.7, 0.3 + cc.b * 0.7]; } // 素手のキャラは、キャラの色をうすく
+  // 強い技ほど濃く・はっきり（弱攻撃はうっすら）
+  let dmax = 0; if (m && m.hits) for (const h of m.hits) dmax = Math.max(dmax, h.dmg || 0);
+  rig.ribK = m ? Math.min(1, Math.max(0.6, dmax / 10)) : (rig.ribK || 0.7);
+  const K = rig.ribK;
   const z = (f.depthZ || 0) + 14;
   const cr = (a, b, c2, d, u, k) => 0.5 * (2 * b[k] + (-a[k] + c2[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c2[k] - d[k]) * u * u + (-a[k] + 3 * b[k] - 3 * c2[k] + d[k]) * u * u * u);
   const L = t.length;
@@ -580,11 +757,13 @@ function updateRibbon(rig, f) {
     const p0 = t[Math.max(0, j - 1)], p1 = t[j], p2 = t[j + 1], p3 = t[Math.min(L - 1, j + 2)];
     const tx = cr(p0, p1, p2, p3, u, 0), ty = cr(p0, p1, p2, p3, u, 1), bx = cr(p0, p1, p2, p3, u, 2), by = cr(p0, p1, p2, p3, u, 3);
     const a = i / (N - 1); // 0 = いちばん古い、1 = いま
-    const w = 0.25 + 0.75 * a; // 古いほど細い
-    pos.setXYZ(i * 2, tx, -ty, z); pos.setXYZ(i * 2 + 1, tx + (bx - tx) * w, -(ty + (by - ty) * w), z);
-    const k = a * a; // 古いほど暗い（＝透明）
-    col.setXYZ(i * 2, (0.5 + 0.5 * c[0]) * k, (0.5 + 0.5 * c[1]) * k, (0.5 + 0.5 * c[2]) * k); // 先は白っぽく
-    col.setXYZ(i * 2 + 1, c[0] * k * 0.35, c[1] * k * 0.35, c[2] * k * 0.35);
+    const w = 0.35 + 0.65 * Math.sqrt(a); // 古いほど細い
+    const ex = (bx - tx) * w, ey = (by - ty) * w;
+    pos.setXYZ(i * 3, tx, -ty, z); pos.setXYZ(i * 3 + 1, tx + ex * 0.16, -(ty + ey * 0.16), z); pos.setXYZ(i * 3 + 2, tx + ex, -(ty + ey), z);
+    const k = Math.pow(a, 1.3) * K; // 古いほどすける
+    col.setXYZW(i * 3, 0.55 + 0.45 * c[0], 0.55 + 0.45 * c[1], 0.55 + 0.45 * c[2], Math.min(1, k * 1.7)); // 先のふち：白っぽい武器の色、くっきり
+    col.setXYZW(i * 3 + 1, c[0], c[1], c[2], Math.min(0.95, k * 1.3));                                    // ふちの内側：武器の色
+    col.setXYZW(i * 3 + 2, c[0] * 0.7, c[1] * 0.7, c[2] * 0.7, k * 0.22);                                // 根元：うすく
   }
   pos.needsUpdate = true; col.needsUpdate = true;
   rig.ribbon.visible = true;
@@ -595,17 +774,9 @@ function projMesh(p) {
   if (m) return m;
   const col = new THREE.Color(p.owner.color);
   if (p.type === 'arrow') {
-    m = new THREE.Group();
-    const faint = p.noHit; // 復帰用の矢（当たらない）はうすく
-    const mk = c => new THREE.MeshStandardMaterial({ color: c, transparent: faint, opacity: faint ? 0.4 : 1, emissive: p.big ? 0x806020 : 0x000000 });
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(p.big ? 1.6 : 1, p.big ? 1.6 : 1, 28, 8), mk(0xf3e3c0));
-    shaft.rotation.z = Math.PI / 2; shaft.position.x = -14; m.add(shaft);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(p.big ? 5 : 3.5, 9, 10), mk(col));
-    head.rotation.z = -Math.PI / 2; head.position.x = 3; m.add(head);
-    if (p.big) {
-      const gl = new THREE.Mesh(SPH, new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.35, depthWrite: false }));
-      gl.scale.set(22, 9, 9); gl.position.x = -6; m.add(gl);
-    }
+    m = makeArrowMesh(p.big, p.noHit); // 参考画像4の矢（復帰用の当たらない矢はうすく）
+  } else if (p.type === 'orb') {
+    m = makeOrb(); // 参考画像2のビーム球
   } else if (p.type === 'drill') {
     // 螺旋矢：太い矢＋回る羽根＋まわりの風の渦
     m = new THREE.Group();
@@ -651,7 +822,7 @@ function projMesh(p) {
       fl.scale.setScalar(p.r * (0.85 + i * 0.3)); m.add(fl); m.userData.fl.push(fl);
     }
   } else if (p.type === 'disc') {
-    m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, 4, 24), new THREE.MeshStandardMaterial({ color: 0xcfe6ff, metalness: 0.85, roughness: 0.15 }));
+    m = makeBoomerang(); m.scale.setScalar(p.r / 20 * 0.55); // 参考画像1のブーメラン（盾とは別の、片手で投げる大きさ）
   } else if (p.type === 'bullet') {
     m = new THREE.Group();
     const b = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, p.big ? 16 : 9, 8), new THREE.MeshBasicMaterial({ color: p.big ? 0xffe28a : 0xfff4d0 }));
@@ -741,7 +912,8 @@ R.render = function (b, alpha, cam, sx, sy, view, G) {
       m.userData.spin.rotation.x = p.age * (p.grip ? 1.1 : 0.7); // 巻き込んでいる間はもっと速く回る
       m.userData.winds.forEach((w, i) => { w.scale.setScalar(1 + Math.sin(p.age * 0.5 + i) * 0.12 + (p.grip ? 0.35 : 0)); });
     }
-    else if (p.type === 'disc') m.rotation.set(Math.PI / 2 - 0.4, 0, p.age * 0.4);
+    else if (p.type === 'disc') m.rotation.set(0.35, 0, -p.age * 0.45 * (p.vx < 0 ? -1 : 1)); // ブーメランは画面の中で回る
+    else if (p.type === 'orb') updateOrb(m, p);
     else if (p.type === 'wave') {
       const d = p.vx < 0 ? Math.PI : 0;
       m.rotation.set(0, 0, d - m.userData.arc / 2);
