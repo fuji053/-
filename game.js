@@ -938,6 +938,7 @@ class Fighter {
   toggleForm() {
     if (!this.cForm2) return;
     this.form2 = !this.form2;
+    if (this.b) this.formLockUntil = this.b.frame + 180;
     const cc = this.vc;
     this.moves = this.form2 ? this.movesForm2 : this.movesBase;
     this.s = tempoStats(cc.stats);
@@ -1350,8 +1351,14 @@ class Fighter {
     return false;
   }
   airDrift(pad, mul) {
-    const s = this.s;
-    if (Math.abs(pad.mx) > 0.15) this.vx = approach(this.vx, pad.mx * s.air * mul, s.airAccel);
+    // 空中の横移動（スティックの倒し具合で細かく）：
+    //   ・少しだけ倒すと、ゆっくり・少しだけ動く（目標の速さも、加速も、倒した量に合わせる）
+    //   ・いっぱいに倒したときは今までと同じ（CPUの動きや技の届き方は変わらない）
+    const s = this.s, DZ = 0.12, ax = Math.abs(pad.mx);
+    if (ax > DZ) {
+      const k = Math.min(1, (ax - DZ) / (1 - DZ)), kk = k * (0.55 + 0.45 * k); // 倒し始めは細かく（ゆるい曲線）
+      this.vx = approach(this.vx, sign(pad.mx) * kk * s.air * mul, s.airAccel * (0.35 + 0.65 * k));
+    }
     else this.vx = approach(this.vx, 0, 0.04);
   }
   /* ---------- 技 ---------- */
@@ -1360,6 +1367,8 @@ class Fighter {
     if (!m) return false;
     // 盾を投げている間は、盾を使う技（盾投げ・反射）は出せない
     if (m.needShield && this.b && this.b.projectiles.some(p => p.maker === this && p.type === 'disc' && !p.dead)) return false;
+    // 猫の姿の切りかえ：一度切りかえたら、3秒（180コマ）は戻せない
+    if (m.events && m.events.some(e => e.swapForm) && this.b && this.b.frame < (this.formLockUntil || 0)) return false;
     if (m.oncePerAir && !this.grounded) {
       if (this.usedOnce[key]) return false;
       this.usedOnce[key] = true;
@@ -1409,7 +1418,11 @@ class Fighter {
         if (!fire) {
           this.chargeT++; this.charging = true;
           this.shotT = Math.min(1, this.chargeT / hs.max);
-          if (this.chargeT === hs.max) { this.b.fx.ring(this.hand[0], this.hand[1], '#ffe9a8', 46); SFX.play('charged'); }
+          if (this.chargeT >= hs.max) {
+            // ため切ったら、自動でためを残して、ふつうに動ける（他の攻撃もできる）。次にBを押したら、すぐ最大の球を撃つ
+            this.b.fx.ring(this.hand[0], this.hand[1], '#ffe9a8', 46); SFX.play('charged');
+            this.storedShot = 1; this.charging = false; this.endMove(); return;
+          }
           this.activeF = -1;
           if (this.grounded) this.vx = approach(this.vx, 0, this.gf);
           else { this.airDrift(pad, 0.5); this.vxSet = true; if (this.vy > 1.5) this.vy = 1.5; }
@@ -2282,7 +2295,8 @@ class Projectile {
     } else if (this.type === 'shock') {
       this.x += this.vx;
       if (Math.abs(this.x) > ST.halfWidth) this.dead = true;
-    } else if (this.type === 'bullet' || this.type === 'wave' || this.type === 'shard' || this.type === 'fireball') {
+    } else if (this.type === 'bullet' || this.type === 'wave' || this.type === 'shard' || this.type === 'fireball' || this.type === 'orb') { // orb：ロボのビーム球（まっすぐ飛ぶ）
+      if (this.type === 'orb' && this.age % 3 === 0) b.fx.spark(this.x - this.vx * 1.5, this.y + (rnd() - 0.5) * this.r, 14, rnd() < 0.5 ? '#8fe0ff' : '#ffb347');
       if (this.type === 'fireball') b.fx.flame(this.x - this.vx * 0.8 + (rnd() - 0.5) * this.r, this.y + (rnd() - 0.5) * this.r, 4 + this.r * 0.45, -this.vx * 0.1, -0.8);
       if (this.type === 'wave') { this.vx *= 0.96; }
       this.x += this.vx; this.y += this.vy;
@@ -3424,7 +3438,8 @@ class Battle {
       }
     }
     const cm = owner.chargeMul || 1;
-    let dmg = (ev.dmg !== undefined ? ev.dmg : base.dmg) * (owner.s.dmgMul || 1) * cm;
+    // projDmgMul：飛び道具だけの攻撃力の倍率（弓：攻撃力1.2は打撃だけに効かせて、矢は元の％にもどす）
+    let dmg = (ev.dmg !== undefined ? ev.dmg : base.dmg) * (owner.s.dmgMul || 1) * (owner.s.projDmgMul || 1) * cm;
     let speed = (ev.speed !== undefined ? ev.speed : base.speed) * (1 + (cm - 1) * 0.35);
     let bkb = ev.bkb !== undefined ? ev.bkb : base.bkb, kbg = ev.kbg !== undefined ? ev.kbg : base.kbg;
     let power = 0;
@@ -3436,7 +3451,7 @@ class Battle {
       let A = hs.min, Bz = hs.max2, u = power;
       if (hs.mid) { const mp = hs.mid.at; if (power <= mp) { Bz = hs.mid; u = power / mp; } else { A = hs.mid; u = (power - mp) / (1 - mp); } }
       const L = k => lerp(A[k], Bz[k], u);
-      dmg = L('dmg') * (owner.s.dmgMul || 1); speed = L('speed'); bkb = L('bkb'); kbg = L('kbg');
+      dmg = L('dmg') * (owner.s.dmgMul || 1) * (owner.s.projDmgMul || 1); speed = L('speed'); bkb = L('bkb'); kbg = L('kbg');
       var shotGrav = A.gf !== undefined ? L('gf') : null;
     }
     const o = { owner, maker: owner, type: base.type, r: base.r, dmg, life: Math.round(base.life * (owner.s.projRange || 1)), mk: owner.move ? owner.move.key : null, mi: owner.moveInst,

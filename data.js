@@ -79,7 +79,7 @@ window.GAME_DATA = {
 
   /* ---------- 物理・システム ---------- */
   physics: {
-    launchScale: 0.135,     // 吹っ飛びの強さ全体（大きいほど全員よく飛ぶ）
+    launchScale: 0.0629,    // 吹っ飛びの強さ全体（大きいほど全員よく飛ぶ）。0.135 → 0.0629：中央で一番強い技（最大ため）を一番軽いキャラに当てても、55％より前では撃墜しない
     kbDecay: 0.30,          // 吹っ飛んだ勢いが弱まる速さ
     hitstunMul: 0.40,       // のけぞり・吹っ飛びで操作できない時間（吹っ飛び量 × この値）
     tumbleKb: 80,           // この値より強く飛ばされると、きりもみ状態になる
@@ -819,7 +819,7 @@ window.GAME_DATA = {
       id: 'fist', no: 1, name: '拳闘士', range: '近距離', type: 'パワー', weapon: 'unarmed',
       portrait: 'face_fist.jpg', // キャラ選択の絵
       model: 'wrestler.glb', // 3Dモデル（Higgsfieldで作成）
-      stats: { weight: 125, walk: 2.8, run: 4.639, air: 2.969, airAccel: 0.32, jump: 14.08, djump: 12.8,
+      stats: { weight: 154, walk: 2.8, run: 4.639, air: 2.969, airAccel: 0.32, jump: 14.08, djump: 12.8,
                gravity: 0.66, fall: 11.2, airJumps: 2, hitScaleY: 1.15, moveKb: { ftilt: 0.85 }, grab: { f: 5, reach: 70, dur: 30 }, landMul: 0.9, runUp: 6, turn: 6, armorMoves: ['dashAttack', 'usmash', 'dsmash', 'ftilt'], dmgMul: 1.1, kbMul: 1.05, speed: 0.92, reachMul: 1.4, endlagMul: 1.15, // 壊しキャラ：技のあとのスキが大きい
                moveSpeed: { nair: 1.1, fair: 1.1, bair: 1.1, uair: 1.1, dair: 1.1 }, recoveryMul: 0.795 },
       look: { dj:'heavy', jumpCol:'#ffd9a0', scale: 1.15, hurtScale: 1.38, thick: 9.5, head: 11.5, gaze: { pitch: 10 } }, // gaze：目線のクセ（pitch：あごを上げる角度、tilt：首のかしげ）
@@ -972,7 +972,7 @@ window.GAME_DATA = {
       portrait: 'face_bow.jpg', // キャラ選択の絵
       model: 'archer.glb', // 3Dモデル（Higgsfieldで作成・Blenderで髪と布の骨を追加）
       stats: { weight: 92, walk: 2.4, run: 6.648, air: 3.688, airAccel: 0.42, jump: 15.5, djump: 14.4,
-               gravity: 0.62, fall: 10.9, airJumps: 2, grab: { f: 5, reach: 64, dur: 24 }, landMul: 0.872, runUp: 4, turn: 4, dmgMul: 1.2, kbMul: 0.923, speed: 1.0, endlagMul: 1.0, hitstunDeal: 1.15, recoveryMul: 0.991, aerialDmg: 1.25,
+               gravity: 0.62, fall: 10.9, airJumps: 2, grab: { f: 5, reach: 64, dur: 24 }, landMul: 0.872, runUp: 4, turn: 4, dmgMul: 1.2, projDmgMul: 0.833, kbMul: 0.923, speed: 1.0, endlagMul: 1.0, hitstunDeal: 1.15, recoveryMul: 0.991, aerialDmg: 1.25,
                moveSpeed: { jab: 1.3, jab2: 1.3, jab3: 1.3, nair: 1.3, fair: 1.3, bair: 1.3, uair: 1.3, dair: 1.3 }, moveDmg: { dashAttack: 1.25 } },
       look: { dj:'back', jumpCol:'#ffe9a8', thick: 6, head: 10, gaze: { pitch: 3, tilt: 0.08 } },
       cpu: { kind: 'neutral', nt: 7, style: 'zone', range: 330, reflect: true },
@@ -1186,7 +1186,7 @@ window.GAME_DATA = {
       portrait: 'face_robot.jpg',
       model: 'robot.glb', // 3Dモデル（Higgsfieldで作成）
       // hitstunMul：のけぞる時間の倍率（1.18 = 18%長い → 連続技を入れられやすい）
-      stats: { weight: 132, walk: 2.6, run: 4.828, air: 2.878, airAccel: 0.28, jump: 14.29, djump: 10.8,
+      stats: { weight: 153, walk: 2.6, run: 4.828, air: 2.878, airAccel: 0.28, jump: 14.29, djump: 10.8,
                gravity: 0.67, fall: 11.4, airJumps: 2, moveKb: { ftilt: 0.85 }, grab: { f: 8, reach: 80, dur: 36 }, landMul: 1.05, runUp: 9, turn: 10, dmgMul: 1.0, kbMul: 1.04, speed: 0.92, hitstunMul: 1.25, endlagMul: 1.15, quickMul: 1.316, reachMul: 0.9, recoveryMul: 1.209, projRange: 0.55 },
       look: { dj:'jet', jumpCol:'#8fe6ff', thick: 10.5, head: 12, scale: 1.24, hurtScale: 1.4, gaze: { pitch: 2 } }, // scale：見た目の大きさ / hurtScale：くらう範囲（キャラの「大きさ」の数値）
       jetFuel: 85, jetRegen: 1.2, // ジェットの燃料（飛べるコマ数）と、地面にいるときの回復の速さ
@@ -1234,8 +1234,8 @@ window.GAME_DATA = {
       },
       projectiles: {
         // ビーム：minLen〜maxLen = ためなし〜最大ための長さ / r〜r2 = 太さ / life = 出ている時間
-        // ビーム球：ためなし r 〜 最大ため r2 の大きさ。まっすぐ飛ぶ
-        orb:   { type:'orb', life:70, r:8, r2:22, dmg:4.3, ang:35, bkb:30, kbg:40, elem:'beam' },
+        // ビーム球：ためなし r 〜 最大ため r2 の大きさ。まっすぐ飛ぶ。life はロボの projRange 0.55 がかかって約72コマ（約540〜640ドット＝キャラ6〜7人分）
+        orb:   { type:'orb', life:130, r:8, r2:22, dmg:4.3, ang:35, bkb:30, kbg:40, elem:'beam' },
         beam:  { type:'beam', life:14, minLen:170, maxLen:560, r:7, r2:18, dmg:4.3, ang:35, bkb:30, kbg:40 },
         shock: { type:'shock', speed:7, life:30, r:18, dmg:6.5, ang:70, bkb:42, kbg:60 },
       },
@@ -1251,7 +1251,7 @@ window.GAME_DATA = {
       portrait: 'face_cat_ice.jpg',
       model: 'cat_ice.glb', // 3Dモデル（Higgsfieldで作成・Blenderで4本足の骨を追加）
       stats: { weight: 72, walk: 3.6, run: 8.357, air: 4.618, airAccel: 0.5, jump: 14.6, djump: 13.9,
-               gravity: 0.65, fall: 11.1, airJumps: 2, hitScaleY: 0.85, grab: { f: 4, reach: 50, dur: 20 }, landMul: 0.85, runUp: 4, turn: 3, dmgMul: 0.92, kbMul: 0.931, speed: 1.12, endlagMul: 1.0, shieldMul: 1.267, quickMul: 0.905, recoveryMul: 1.398, projRange: 1.45 },
+               gravity: 0.65, fall: 11.1, airJumps: 2, hitScaleY: 0.85, grab: { f: 4, reach: 50, dur: 20 }, landMul: 0.85, runUp: 4, turn: 3, dmgMul: 0.92, kbMul: 0.9, speed: 1.12, endlagMul: 1.0, shieldMul: 1.267, quickMul: 0.905, recoveryMul: 1.398, projRange: 1.45 },
       // quad：4本足 / hipH：腰の高さ / hurtR：くらう範囲の太さ
       look: { dj:'double', jumpCol:'#bff4ff', jumpCol2:'#ff8a3c', scale: 0.85, hurtScale: 0.9, quad: true, hipH: 24, hurtR: 15, thick: 6, head: 9, tagH: 70, gaze: {} },
       cpu: { kind: 'neutral', kind2: 'breaker', nt: 6, nt2: 4, style: 'rush', range: 40 },
@@ -1270,9 +1270,9 @@ window.GAME_DATA = {
                 poses: [[0,'q_crouch'],[5,'q_stretchUp'],[20,'q_stretchUp'],[28,'q_fall'],[40,'q_helpless']],
                 gravityFrames: [0,20],
                 hits: [{ f:[5,8], x:0, y:20, r:22, dmg:3.6, ang:85, bkb:50, kbg:60 }] },
-        down: { name: '下B：炎のネコに変わる', dur: 26,
-                poses: [[0,'q_hiss'],[10,'q_sitProud'],[26,'q_idle']],
-                events: [{ f:10, swapForm:true }] },
+        down: { name: '下B：炎のネコに変わる', dur: 40,
+                poses: [[0,'q_hiss'],[16,'q_sitProud'],[40,'q_idle']],
+                events: [{ f:16, swapForm:true }] },
         /* --- 空中 --- */
         airN: { name: '空中NB：氷のつぶて', dur: 26, landLag: 8, gravityMul: 0.4, elem: 'ice',
                 poses: [[0,'q_castWind'],[6,'q_cast'],[14,'q_cast'],[26,'q_fall']],
@@ -1290,9 +1290,9 @@ window.GAME_DATA = {
                 poses: [[0,'q_ball'],[5,'q_stretchUp'],[20,'q_stretchUp'],[28,'q_fall'],[40,'q_helpless']],
                 gravityFrames: [0,20],
                 hits: [{ f:[5,8], x:0, y:20, r:22, dmg:3.6, ang:85, bkb:50, kbg:60 }] },
-        airD: { name: '空中下B：炎のネコに変わる', dur: 26, landLag: 8,
-                poses: [[0,'q_ball'],[10,'q_fall'],[26,'q_fall']],
-                events: [{ f:10, swapForm:true }] },
+        airD: { name: '空中下B：炎のネコに変わる', dur: 40, landLag: 8,
+                poses: [[0,'q_ball'],[16,'q_fall'],[40,'q_fall']],
+                events: [{ f:16, swapForm:true }] },
       },
       throws: {
         fthrow: { name: '前投げ：ねこパンチ連打', dur: 28, release: 12, poses: [[0,'q_hold'],[6,'q_swipe'],[9,'q_swipe2'],[12,'q_swipe'],[28,'q_idle']],
@@ -1312,8 +1312,8 @@ window.GAME_DATA = {
       /* ===== 炎の姿（下Bで入れかわる）：パワー重視。バンダナと目の傷 ===== */
       form2: {
         name: 'ネコ（炎）', portrait: 'face_cat_fire.jpg', model: 'cat_fire.glb',
-        stats: { weight: 84, walk: 3.0, run: 6.326, air: 3.674, airAccel: 0.38, jump: 14.1, djump: 12.5,
-                 gravity: 0.66, fall: 11.2, airJumps: 2, hitScaleY: 0.85, grab: { f: 6, reach: 56, dur: 28 }, landMul: 1.15, runUp: 7, turn: 7, dmgMul: 1.15, kbMul: 0.93, speed: 0.96, shieldMul: 1.2, quickMul: 0.829, recoveryMul: 1.218 },
+        stats: { weight: 85, walk: 3.0, run: 6.0, air: 3.674, airAccel: 0.38, jump: 14.1, djump: 12.5,
+                 gravity: 0.66, fall: 11.2, airJumps: 2, hitScaleY: 0.85, grab: { f: 6, reach: 56, dur: 28 }, landMul: 1.15, runUp: 7, turn: 7, dmgMul: 1.15, kbMul: 0.9, speed: 0.96, shieldMul: 1.2, quickMul: 0.829, endlagMul: 1.15, recoveryMul: 1.1 },
         // 炎の姿で入れかわる通常技（強い技だけ）
         moves: {
           ftilt: { name: '横強【炎】燃えるツメ', dur: 28, iasa: 24, elem: 'fire',
@@ -1358,9 +1358,9 @@ window.GAME_DATA = {
                   gravityFrames: [0,19],
                   hits: [{ f:[6,14], x:0, y:24, r:26, dmg:1.4, ang:88, fkb:30, rehit:4, react:'light' },
                          { f:[16,18], x:0, y:40, r:28, dmg:4.3, ang:85, bkb:55, kbg:70 }] },
-          down: { name: '下B：氷のネコに変わる', dur: 26,
-                  poses: [[0,'q_hiss'],[10,'q_sitProud'],[26,'q_idle']],
-                  events: [{ f:10, swapForm:true }] },
+          down: { name: '下B：氷のネコに変わる', dur: 40,
+                  poses: [[0,'q_hiss'],[16,'q_sitProud'],[40,'q_idle']],
+                  events: [{ f:16, swapForm:true }] },
           airN: { name: '空中NB【炎】火の玉', dur: 30, landLag: 10, gravityMul: 0.3, elem: 'fire',
                   holdShot: { f:6, max:50, over:20, min:{ dmg:3.6, speed:9, bkb:30, kbg:54 }, max2:{ dmg:10.1, speed:12, bkb:42, kbg:101 } },
                   poses: [[0,'q_castWind'],[6,'q_castWind'],[9,'q_cast'],[30,'q_fall']],
@@ -1379,9 +1379,9 @@ window.GAME_DATA = {
                   gravityFrames: [0,19],
                   hits: [{ f:[6,14], x:0, y:24, r:26, dmg:1.4, ang:88, fkb:30, rehit:4, react:'light' },
                          { f:[16,18], x:0, y:40, r:28, dmg:4.3, ang:85, bkb:55, kbg:90 }] },
-          airD: { name: '空中下B：氷のネコに変わる', dur: 26, landLag: 8,
-                  poses: [[0,'q_ball'],[10,'q_fall'],[26,'q_fall']],
-                  events: [{ f:10, swapForm:true }] },
+          airD: { name: '空中下B：氷のネコに変わる', dur: 40, landLag: 8,
+                  poses: [[0,'q_ball'],[16,'q_fall'],[40,'q_fall']],
+                  events: [{ f:16, swapForm:true }] },
         },
         projectiles: {
           fireball: { type:'fireball', speed:10, life:70, r:11, dmg:4.3, ang:40, bkb:35, kbg:50, elem:'fire' },
@@ -1471,7 +1471,7 @@ window.GAME_DATA = {
       portrait: 'face_skater.jpg',
       model: 'skater.glb', // 仮の3Dモデル（Blenderで作成。あとでHiggsfieldで作り直す）
       stats: { weight: 80, walk: 4.2, run: 8.606, air: 4.399, airAccel: 0.55, jump: 16.4, djump: 15.2,
-               gravity: 0.63, fall: 11.0, airJumps: 2, hitScaleY: 0.95, grab: { f: 5, reach: 62, dur: 24 }, landMul: 0.9, runUp: 10, turn: 10, dmgMul: 0.95, kbMul: 0.956, speed: 1.1, endlagMul: 1.0, friction: 0.7, quickMul: 0.79, reachMul: 1.253, recoveryMul: 1.082 },
+               gravity: 0.63, fall: 11.0, airJumps: 2, hitScaleY: 0.95, grab: { f: 5, reach: 62, dur: 24 }, landMul: 0.9, runUp: 10, turn: 10, dmgMul: 1.0, aerialDmg: 1.15, moveKb: { bair: 1.1 }, kbMul: 0.956, speed: 1.1, endlagMul: 1.0, friction: 0.7, quickMul: 0.79, reachMul: 1.253, recoveryMul: 1.082 },
       look: { dj:'trick', jumpCol:'#9fe6ff', scale: 0.95, hurtScale: 0.9, thick: 5.5, head: 9.5, gaze: { pitch: 0 } },
       cpu: { kind: 'neutral', nt: 8, sigW: 4, egW: 2, style: 'mid', range: 70 }, // egW：復帰阻止の得意さ
       specials: {
